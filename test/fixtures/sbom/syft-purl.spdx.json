@@ -1,0 +1,167 @@
+{
+ "spdxVersion": "SPDX-2.3",
+ "packages": [
+  {
+   "name": "@algolia/abtesting",
+   "SPDXID": "SPDXRef-Package-npm--algolia-abtesting-02993e1c4a1447de",
+   "versionInfo": "1.16.1",
+   "supplier": "NOASSERTION",
+   "downloadLocation": "https://registry.npmjs.org/@algolia/abtesting/-/abtesting-1.16.1.tgz",
+   "filesAnalyzed": false,
+   "sourceInfo": "acquired package info from installed node module manifest file: /docs/package-lock.json",
+   "licenseConcluded": "NOASSERTION",
+   "licenseDeclared": "MIT",
+   "copyrightText": "NOASSERTION",
+   "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/abtesting:\\@algolia\\/abtesting:1.16.1:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "PACKAGE-MANAGER",
+     "referenceType": "purl",
+     "referenceLocator": "pkg:npm/%40algolia/abtesting@1.16.1"
+    }
+   ]
+  },
+  {
+   "name": "@algolia/autocomplete-core",
+   "SPDXID": "SPDXRef-Package-npm--algolia-autocomplete-core-9421a6bb0cba7ece",
+   "versionInfo": "1.17.7",
+   "supplier": "NOASSERTION",
+   "downloadLocation": "https://registry.npmjs.org/@algolia/autocomplete-core/-/autocomplete-core-1.17.7.tgz",
+   "filesAnalyzed": false,
+   "sourceInfo": "acquired package info from installed node module manifest file: /docs/package-lock.json",
+   "licenseConcluded": "NOASSERTION",
+   "licenseDeclared": "MIT",
+   "copyrightText": "NOASSERTION",
+   "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete-core:\\@algolia\\/autocomplete-core:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete-core:\\@algolia\\/autocomplete_core:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete_core:\\@algolia\\/autocomplete-core:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete_core:\\@algolia\\/autocomplete_core:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete:\\@algolia\\/autocomplete-core:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete:\\@algolia\\/autocomplete_core:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "PACKAGE-MANAGER",
+     "referenceType": "purl",
+     "referenceLocator": "pkg:npm/%40algolia/autocomplete-core@1.17.7"
+    }
+   ]
+  },
+  {
+   "name": "@algolia/autocomplete-plugin-algolia-insights",
+   "SPDXID": "SPDXRef-Package-npm--algolia-autocomplete-plugin-algolia-insights-ed50864d7683dcfd",
+   "versionInfo": "1.17.7",
+   "supplier": "NOASSERTION",
+   "downloadLocation": "https://registry.npmjs.org/@algolia/autocomplete-plugin-algolia-insights/-/autocomplete-plugin-algolia-insights-1.17.7.tgz",
+   "filesAnalyzed": false,
+   "sourceInfo": "acquired package info from installed node module manifest file: /docs/package-lock.json",
+   "licenseConcluded": "NOASSERTION",
+   "licenseDeclared": "MIT",
+   "copyrightText": "NOASSERTION",
+   "externalRefs": [
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete-plugin-algolia-insights:\\@algolia\\/autocomplete-plugin-algolia-insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete-plugin-algolia-insights:\\@algolia\\/autocomplete_plugin_algolia_insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete_plugin_algolia_insights:\\@algolia\\/autocomplete-plugin-algolia-insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete_plugin_algolia_insights:\\@algolia\\/autocomplete_plugin_algolia_insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete-plugin-algolia:\\@algolia\\/autocomplete-plugin-algolia-insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete-plugin-algolia:\\@algolia\\/autocomplete_plugin_algolia_insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete_plugin_algolia:\\@algolia\\/autocomplete-plugin-algolia-insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete_plugin_algolia:\\@algolia\\/autocomplete_plugin_algolia_insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete-plugin:\\@algolia\\/autocomplete-plugin-algolia-insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete-plugin:\\@algolia\\/autocomplete_plugin_algolia_insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete_plugin:\\@algolia\\/autocomplete-plugin-algolia-insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete_plugin:\\@algolia\\/autocomplete_plugin_algolia_insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete:\\@algolia\\/autocomplete-plugin-algolia-insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "SECURITY",
+     "referenceType": "cpe23Type",
+     "referenceLocator": "cpe:2.3:a:\\@algolia\\/autocomplete:\\@algolia\\/autocomplete_plugin_algolia_insights:1.17.7:*:*:*:*:*:*:*"
+    },
+    {
+     "referenceCategory": "PACKAGE-MANAGER",
+     "referenceType": "purl",
+     "referenceLocator": "pkg:npm/%40algolia/autocomplete-plugin-algolia-insights@1.17.7"
+    }
+   ]
+  }
+ ]
+}

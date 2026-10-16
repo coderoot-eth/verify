@@ -1,0 +1,67 @@
+# AGENTS.md
+
+Instructions for AI coding agents that add, upgrade or ship dependencies and artifacts.
+
+**The purl is only an index; the hash is the trust.** Never treat a package as verified because
+its name and version look right. Verify the bytes.
+
+## Which command
+
+Install nothing globally; run through `npx`.
+
+| situation | command |
+|---|---|
+| You hold the file (a tarball, a binary, a build output) | `npx @coderoot-eth/verify verify --file <path> --json` |
+| You hold only a digest | `npx @coderoot-eth/verify verify --hash sha256:<hex> --json` |
+| You changed `package-lock.json` | `npx @coderoot-eth/verify verify --lockfile package-lock.json --json <out>` |
+| You have an SBOM | `npx @coderoot-eth/verify verify --sbom <path> --json <out>` |
+| You need the digest of a container image | `npx @coderoot-eth/verify hash --image <ref> --json`, then `verify --hash <digest> --source registry` (needs `crane`) |
+| You need the digests of a file | `npx @coderoot-eth/verify hash <path> --json` |
+
+Prefer `--file` over `--hash` when you have the file: the answer then rests on bytes you hashed
+yourself. Never pass a digest you copied from an SBOM: a declared digest is not evidence.
+
+## Reading the answer
+
+| `verdict` | what it means | what you do |
+|---|---|---|
+| `verified` | these exact bytes are attested and not revoked | proceed |
+| `attested-bytes-unproven` | the name and version are attested, but these bytes did not match | **stop**. Treat as unverified; get the artifact from its registry and check it with `--file` |
+| `unregistered` | no attestation exists for these bytes | not a failure for a dependency check. **Refuse** in a release or deploy step |
+| `revoked` | the bytes were attested and the attestation was revoked | **refuse**, always. Do not install, ship or pin it. Tell the user which component and its `attestationUids` |
+
+Flags on top of a verdict:
+
+| flag | what you do |
+|---|---|
+| `mismatch: true` | **stop**. The bytes in hand are not the bytes attested for that name and version. Report it; do not retry with another source to make it pass |
+| `authorCpoaRevoked: true` or `null` | **refuse** in a release or deploy step. The bytes are attested, but the agent that produced them has lost its authority, or that could not be checked |
+| `degraded: true` | the answer may miss a recent revoke. **Refuse** in a release or deploy step; elsewhere, report it and re-run later |
+
+## Exit codes
+
+`verify --file` / `--hash`: `0` verified · `1` revoked · `2` unregistered, unproven or
+`authorCpoaRevoked` · `3` usage error · `4` could not be fully checked.
+
+`verify --lockfile` / `--sbom`: `0` nothing failed · `1` a revoked component · `2` a mismatch ·
+`3` usage or parse error. Read the JSON report for unregistered, degraded and
+`authorCpoaRevoked` counts.
+
+Never add `|| true`, `continue-on-error`, `--warn-on-degraded` or `--no-cache` to make a failing
+check pass. If a check fails, stop and tell the user why.
+
+## What you must not do
+
+- Never report a component as verified from its name and version.
+- Never compare a digest you read from an SBOM against an attestation.
+- Never assume an algorithm from a digest's length; always send it tagged (`sha256:`, `sha512:`).
+- Never treat an unreachable endpoint as a pass in a release or deploy step.
+- Never submit a release for approval on your own. Releases are submitted by the publisher's CI
+  with its GitHub identity token, and every attestation needs a person's approval.
+
+## Details
+
+- [spec/verdicts.md](spec/verdicts.md): verdicts, flags, exit codes
+- [spec/evidence-record.md](spec/evidence-record.md): the JSON report
+- [spec/verify-endpoint.md](spec/verify-endpoint.md): the public endpoint
+- [spec/eas-schemas.md](spec/eas-schemas.md): re-checking an attestation on chain
