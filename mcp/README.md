@@ -42,7 +42,7 @@ behind it with its attester, its on-chain times and a link to it on EAS:
 | `action` | when | the agent |
 |---|---|---|
 | `proceed` | `verified` | uses it |
-| `caution` | `unregistered`, a degraded answer, or a revoked producing agent | may use it for a dependency check; refuses it in a release or deploy step |
+| `caution` | `unregistered`, a degraded answer, or a revoked producing agent | may use it as a dependency; refuses it as the artifact it ships or deploys |
 | `stop` | the bytes differ from what is attested, or are unproven | does not use it until that is explained |
 | `refuse` | `revoked` | never uses it |
 

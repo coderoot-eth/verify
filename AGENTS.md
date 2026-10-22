@@ -88,7 +88,7 @@ check pass. If a check fails, stop and tell the user why.
 | `action` | you |
 |---|---|
 | `proceed` | use it |
-| `caution` | may use it for a dependency check; refuse it in a release or deploy step |
+| `caution` | may use it as a dependency; refuse it as the artifact you ship or deploy |
 | `stop` | do not use it until the mismatch or unproven bytes are explained |
 | `refuse` | never use it |
 

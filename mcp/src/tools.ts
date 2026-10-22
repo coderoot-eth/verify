@@ -23,7 +23,7 @@ export interface CheckOptions {
 /**
  * What the agent should do with an answer:
  * - proceed: the bytes are attested and not revoked
- * - caution: fine for a dependency check, but refuse it in a release or deploy step
+ * - caution: fine as a dependency, but refuse it as the artifact you ship or deploy
  * - stop: do not use it until the mismatch or unproven bytes are explained
  * - refuse: never use it
  */
@@ -71,10 +71,10 @@ function attestationsOf(refs: AttestationRef[] | undefined, uids?: string[]): At
 function judge(verdict: Verdict, flags: { mismatch: boolean; degraded: boolean; authorCpoaRevoked: boolean | null }): { action: Action; advice: string } {
   if (verdict === 'revoked') return { action: 'refuse', advice: 'Revoked: do not install, ship or pin it. Tell the user which component it is and its attestation UIDs.' };
   if (flags.mismatch) return { action: 'stop', advice: 'The bytes differ from what is attested for this name and version. Report it; do not retry from another source to make it pass.' };
-  if (flags.authorCpoaRevoked !== false) return { action: 'caution', advice: 'The producing agent has lost its authority, or that could not be checked. Refuse in a release or deploy step.' };
-  if (flags.degraded) return { action: 'caution', advice: 'The answer may miss a recent revoke. Refuse in a release or deploy step; elsewhere report it and check again later.' };
+  if (flags.authorCpoaRevoked !== false) return { action: 'caution', advice: 'The producing agent has lost its authority, or that could not be checked. Refuse it as the artifact you ship or deploy.' };
+  if (flags.degraded) return { action: 'caution', advice: 'The answer may miss a recent revoke. Refuse it as the artifact you ship or deploy; otherwise report it and check again later.' };
   if (verdict === 'verified') return { action: 'proceed', advice: 'These exact bytes are attested and not revoked.' };
-  if (verdict === 'unregistered') return { action: 'caution', advice: 'No attestation for these bytes. Not a failure for a dependency check, but refuse it in a release or deploy step.' };
+  if (verdict === 'unregistered') return { action: 'caution', advice: 'No attestation for these bytes. Not a failure for a dependency; refuse it only as the artifact you ship or deploy.' };
   return { action: 'stop', advice: 'The name and version are attested, but these bytes were not proven. Treat as unverified: get the artifact from its registry and check the file itself.' };
 }
 
@@ -155,7 +155,7 @@ export async function checkLockfile(
   const advice = failed
     ? 'At least one package is revoked or its bytes differ from what is attested. Do not install or ship this lockfile; report the packages in attention.'
     : attention.length > 0
-      ? 'Nothing revoked or mismatched, but some answers need attention (degraded, or a revoked author). Refuse in a release or deploy step.'
+      ? 'Nothing revoked or mismatched, but some answers need attention (degraded, or a revoked author). Check those again before relying on them.'
       : 'Nothing revoked or mismatched. Unregistered packages are common and are not a failure for a dependency check.';
   return {
     action: failed ? 'refuse' : attention.length > 0 ? 'caution' : 'proceed',
