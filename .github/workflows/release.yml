@@ -1,0 +1,103 @@
+# Publishes @coderoot-eth/verify when a version tag (v1.2.3) is pushed, then
+# submits the release to CodeRoot for a person's approval.
+#
+# `pack` builds and tests once and has no publish rights. `publish` runs in the
+# `npm-publish` environment, the only place npm's trusted publishing accepts,
+# and publishes that exact tarball with provenance; no npm token exists.
+# `submit` has no environment, so its identity token cannot publish, and hands
+# the same tarball to CodeRoot.
+
+name: release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions: {}
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
+      tarball_b64: ${{ steps.pack.outputs.tarball_b64 }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: ""
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - id: pack
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          [ "v$version" = "$TAG" ] || { echo "tag $TAG does not match package.json $version"; exit 1; }
+          npm run build
+          npm pack --ignore-scripts >/dev/null
+          mv ./*.tgz package.tgz
+          {
+            echo "version=$version"
+            echo "tarball_b64=$(base64 -w0 package.tgz)"
+            echo "sha256=$(shasum -a 256 package.tgz | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: ""
+      - name: Exact npm
+        run: npm install -g npm@12.2.0 --ignore-scripts && npm --version
+      - name: Restore and verify the tarball
+        env:
+          TB64: ${{ needs.pack.outputs.tarball_b64 }}
+          EXPECTED: ${{ needs.pack.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          echo "$TB64" | base64 -d > package.tgz
+          [ "$(shasum -a 256 package.tgz | cut -d' ' -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }
+      - name: Publish with provenance
+        run: npm publish package.tgz --registry https://registry.npmjs.org/ --access public --provenance --ignore-scripts
+
+  submit:
+    needs: [pack, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Restore and verify the tarball
+        env:
+          TB64: ${{ needs.pack.outputs.tarball_b64 }}
+          EXPECTED: ${{ needs.pack.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          echo "$TB64" | base64 -d > package.tgz
+          [ "$(shasum -a 256 package.tgz | cut -d' ' -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }
+      - name: Submit to CodeRoot
+        uses: coderoot-eth/action@f216ce63c7ed6809f58fa422db35ca527931a8bd
+        with:
+          mode: submit
+          flow: published
+          artifact: package.tgz
+          name: "@coderoot-eth/verify"
+          version: ${{ needs.pack.outputs.version }}
