@@ -1,5 +1,8 @@
-# Publishes @coderoot-eth/verify when a version tag (v1.2.3) is pushed, then
-# submits the release to CodeRoot for a person's approval.
+# Publishes a package from this repository when its version tag is pushed, then
+# submits the release to CodeRoot for a person's approval:
+#   v1.2.3           @coderoot-eth/verify  (repository root)
+#   mcp-v1.2.3       @coderoot-eth/mcp     (mcp/)
+#   coderoot-v1.2.3  coderoot              (wrapper/)
 #
 # `pack` builds and tests once and has no publish rights. `publish` runs in the
 # `npm-publish` environment, the only place npm's trusted publishing accepts,
@@ -11,7 +14,10 @@ name: release
 
 on:
   push:
-    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "mcp-v[0-9]+.[0-9]+.[0-9]+"
+      - "coderoot-v[0-9]+.[0-9]+.[0-9]+"
 
 permissions: {}
 
@@ -22,6 +28,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      name: ${{ steps.pack.outputs.name }}
       version: ${{ steps.pack.outputs.version }}
       tarball_b64: ${{ steps.pack.outputs.tarball_b64 }}
       sha256: ${{ steps.pack.outputs.sha256 }}
@@ -35,17 +42,23 @@ jobs:
           cache: ""
       - run: npm ci --ignore-scripts
       - run: npm test
+      - run: npm run build
       - id: pack
         env:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          version="$(node -p "require('./package.json').version")"
-          [ "v$version" = "$TAG" ] || { echo "tag $TAG does not match package.json $version"; exit 1; }
-          npm run build
-          npm pack --ignore-scripts >/dev/null
-          mv ./*.tgz package.tgz
+          case "$TAG" in
+            mcp-v*) dir=mcp; prefix=mcp-v; npm test -w mcp ;;
+            coderoot-v*) dir=wrapper; prefix=coderoot-v; bash scripts/test-wrapper.sh ;;
+            *) dir=.; prefix=v ;;
+          esac
+          name="$(node -p "require('./$dir/package.json').name")"
+          version="$(node -p "require('./$dir/package.json').version")"
+          [ "$prefix$version" = "$TAG" ] || { echo "tag $TAG does not match $name $version"; exit 1; }
+          (cd "$dir" && npm pack --ignore-scripts >/dev/null && mv ./*.tgz "$GITHUB_WORKSPACE/package.tgz")
           {
+            echo "name=$name"
             echo "version=$version"
             echo "tarball_b64=$(base64 -w0 package.tgz)"
             echo "sha256=$(shasum -a 256 package.tgz | cut -d' ' -f1)"
@@ -99,5 +112,5 @@ jobs:
           mode: submit
           flow: published
           artifact: package.tgz
-          name: "@coderoot-eth/verify"
+          name: ${{ needs.pack.outputs.name }}
           version: ${{ needs.pack.outputs.version }}
