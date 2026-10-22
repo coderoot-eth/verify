@@ -143,7 +143,7 @@ console.log(result.verdict, result.attestations?.map((a) => a.uid));
 ## For AI agents
 
 [AGENTS.md](AGENTS.md) says which command to run, how to read each verdict, and what an agent must
-refuse.
+refuse. The same checks are available as MCP tools in [`@coderoot-eth/mcp`](mcp/README.md).
 
 ## Specification
 
