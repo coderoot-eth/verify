@@ -12,14 +12,28 @@ Install nothing globally; run through `npx`.
 | situation | command |
 |---|---|
 | You hold the file (a tarball, a binary, a build output) | `npx @coderoot-eth/verify verify --file <path> --json` |
-| You hold only a digest | `npx @coderoot-eth/verify verify --hash sha256:<hex> --json` |
-| You changed `package-lock.json` | `npx @coderoot-eth/verify verify --lockfile package-lock.json --json <out>` |
-| You have an SBOM | `npx @coderoot-eth/verify verify --sbom <path> --json <out>` |
+| You hold only a digest | `npx @coderoot-eth/verify verify --hash sha256:<hex> --source <lockfile\|registry\|bytes> --json` |
+| You changed `package-lock.json`, or a release is about to ship | `npx @coderoot-eth/verify verify --lockfile package-lock.json` |
+| You have an SBOM | `npx @coderoot-eth/verify verify --sbom <path>` |
 | You need the digest of a container image | `npx @coderoot-eth/verify hash --image <ref> --json`, then `verify --hash <digest> --source registry` (needs `crane`) |
 | You need the digests of a file | `npx @coderoot-eth/verify hash <path> --json` |
 
 Prefer `--file` over `--hash` when you have the file: the answer then rests on bytes you hashed
-yourself. Never pass a digest you copied from an SBOM: a declared digest is not evidence.
+yourself. With `--hash`, say where the digest came from with `--source` (`lockfile` is the
+default). Never pass a digest you copied from an SBOM: a declared digest is not evidence.
+
+`--lockfile` and `--sbom` print the JSON report to stdout and the summary to stderr. Pass
+`--json <path>` only to write the report to a file, and keep that file out of the repository.
+
+## Two kinds of check
+
+- **Dependencies** (a lockfile or an SBOM, including right before a release): most of the
+  ecosystem is not attested yet, so `unregistered` is reported, not refused. Refuse on `revoked`
+  and on a mismatch.
+- **The artifact you ship or deploy** (your own build, an image, a tarball you are about to
+  publish or start): only `verified` passes. Refuse `unregistered` too.
+
+The rules below that say "in a release or deploy step" are about the second kind.
 
 ## Reading the answer
 
@@ -27,7 +41,7 @@ yourself. Never pass a digest you copied from an SBOM: a declared digest is not 
 |---|---|---|
 | `verified` | these exact bytes are attested and not revoked | proceed |
 | `attested-bytes-unproven` | the name and version are attested, but these bytes did not match | **stop**. Treat as unverified; get the artifact from its registry and check it with `--file` |
-| `unregistered` | no attestation exists for these bytes | not a failure for a dependency check. **Refuse** in a release or deploy step |
+| `unregistered` | no attestation exists for these bytes | not a failure for a dependency. **Refuse** it for the artifact you ship or deploy |
 | `revoked` | the bytes were attested and the attestation was revoked | **refuse**, always. Do not install, ship or pin it. Tell the user which component and its `attestationUids` |
 
 Flags on top of a verdict:
