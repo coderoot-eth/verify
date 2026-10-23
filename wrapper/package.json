@@ -1,0 +1,13 @@
+{
+  "name": "coderoot",
+  "version": "0.1.0",
+  "description": "Runs the coderoot command from @coderoot-eth/verify, so `npx coderoot verify` works.",
+  "license": "Apache-2.0",
+  "repository": { "type": "git", "url": "git+https://github.com/coderoot-eth/verify.git", "directory": "wrapper" },
+  "homepage": "https://github.com/coderoot-eth/verify#readme",
+  "bin": { "coderoot": "bin/coderoot.js" },
+  "files": ["bin", "README.md", "LICENSE", "NOTICE"],
+  "publishConfig": { "access": "public", "provenance": true },
+  "engines": { "node": ">=20" },
+  "dependencies": { "@coderoot-eth/verify": "^0.1.0" }
+}
