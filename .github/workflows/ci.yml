@@ -27,5 +27,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: npx coderoot wrapper
+        run: bash scripts/test-wrapper.sh
       - name: Package contents
         run: npm pack --dry-run --ignore-scripts
