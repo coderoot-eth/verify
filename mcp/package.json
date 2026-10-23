@@ -35,9 +35,9 @@
     "provenance": true
   },
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/main.js --external:@modelcontextprotocol/sdk --external:zod --banner:js='#!/usr/bin/env node'",
+    "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test test/*.test.mjs"
+    "test": "npm run build && node --test --test-timeout=120000 test/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

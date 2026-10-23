@@ -28,6 +28,7 @@ const DEGRADED = 'd'.repeat(64);
 let stub;
 let base;
 const seen = [];
+const clients = [];
 
 function verifyAnswer(hex) {
   if (hex === VERIFIED) {
@@ -70,10 +71,15 @@ before(async () => {
   base = `http://127.0.0.1:${stub.address().port}`;
 });
 
-after(() => stub.close());
+// Close every server even when a test fails before its own close.
+after(async () => {
+  await Promise.allSettled(clients.map((c) => c.close()));
+  stub.close();
+});
 
 async function connect(env = {}) {
   const client = new Client({ name: 'test', version: '0' });
+  clients.push(client);
   await client.connect(
     new StdioClientTransport({
       command: process.execPath,
@@ -197,6 +203,36 @@ test('verify_lockfile: unregistered packages alone do not fail a dependency chec
   const limited = (await call(client, 'verify_lockfile', { content: lockfile(many), limit: 5 })).structuredContent;
   assert.equal(limited.summary.checked, 5);
   assert.equal(limited.summary.distinct, 60);
+  await client.close();
+});
+
+test('verify_lockfile: a partial scan is never proceed, even when everything checked is clean', async () => {
+  const client = await connect();
+  // Good first, revoked second: limit 1 checks only the good one.
+  const content = lockfile([
+    ['good', '1.0.0', TARBALLS['good@1.0.0']],
+    ['bad', '1.0.0', TARBALLS['bad@1.0.0']],
+  ]);
+  const partial = (await call(client, 'verify_lockfile', { content, limit: 1 })).structuredContent;
+  assert.equal(partial.complete, false);
+  assert.equal(partial.summary.checked, 1);
+  assert.equal(partial.summary.distinct, 2);
+  assert.equal(partial.summary.unchecked, 1);
+  assert.equal(partial.summary.revoked, 0);
+  assert.notEqual(partial.action, 'proceed');
+  assert.match(partial.advice, /1 of 2 packages were not checked/);
+
+  // A revoke among the checked packages still refuses a partial scan.
+  const revokedFirst = lockfile([
+    ['bad', '1.0.0', TARBALLS['bad@1.0.0']],
+    ['good', '1.0.0', TARBALLS['good@1.0.0']],
+  ]);
+  assert.equal((await call(client, 'verify_lockfile', { content: revokedFirst, limit: 1 })).structuredContent.action, 'refuse');
+
+  const full = (await call(client, 'verify_lockfile', { content })).structuredContent;
+  assert.equal(full.complete, true);
+  assert.equal(full.summary.unchecked, 0);
+  assert.equal(full.action, 'refuse');
   await client.close();
 });
 

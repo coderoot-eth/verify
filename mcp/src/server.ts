@@ -1,7 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { checkHash, checkPackage, checkLockfile, CheckOptions } from './tools';
-import { packageVersion } from '../../lib/version';
+/** This package's version, baked in by build.mjs. */
+declare const __MCP_VERSION__: string;
+export const VERSION: string = typeof __MCP_VERSION__ === 'string' ? __MCP_VERSION__ : '0.0.0-dev';
 
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } as const;
 
@@ -15,7 +17,7 @@ function failure(error: unknown) {
 
 /** An MCP server with three read-only tools. It can verify; it can never attest or revoke. */
 export function createServer(options: CheckOptions = {}): McpServer {
-  const server = new McpServer({ name: 'coderoot', version: packageVersion() });
+  const server = new McpServer({ name: 'coderoot', version: VERSION });
 
   server.registerTool(
     'verify_package',
@@ -68,7 +70,7 @@ export function createServer(options: CheckOptions = {}): McpServer {
       inputSchema: {
         path: z.string().optional().describe('path to package-lock.json or npm-shrinkwrap.json'),
         content: z.string().optional().describe('the lockfile JSON, instead of a path'),
-        limit: z.number().int().positive().optional().describe('check only the first N distinct packages'),
+        limit: z.number().int().positive().optional().describe('check only the first N distinct packages; the result is then partial and never proceed'),
         details: z.boolean().default(false).describe('include the result for every package'),
       },
       annotations: readOnly,

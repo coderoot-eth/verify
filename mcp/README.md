@@ -48,7 +48,9 @@ behind it with its attester, its on-chain times and a link to it on EAS:
 
 `verify_lockfile` returns a summary, the packages that need attention, and one action for the
 whole lockfile: `refuse` when any package is revoked or mismatched. Unregistered packages are common
-and do not fail it. `details: true` adds the result for every package.
+and do not fail it. `details: true` adds the result for every package. With `limit`, only the first
+packages are checked: the result says `complete: false` with the number left unchecked, and its
+action is never `proceed`.
 
 ## Set up
 

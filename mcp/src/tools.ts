@@ -119,7 +119,9 @@ export async function checkPackage(name: string, version: string, options: Check
 export interface LockfileResult {
   action: Action;
   advice: string;
-  summary: ReturnType<typeof summarize> & { distinct: number; checked: number };
+  /** False when `limit` left packages unchecked: the action then covers only the checked ones. */
+  complete: boolean;
+  summary: ReturnType<typeof summarize> & { distinct: number; checked: number; unchecked: number };
   /** Components that need attention: revoked, mismatched, degraded, or with a revoked author. */
   attention: Array<CheckResult & { purl: string }>;
   components?: Array<CheckResult & { purl: string }>;
@@ -150,16 +152,21 @@ export async function checkLockfile(
   const results = records.map((r) => ({ purl: r.purl, ...fromRecord(r) }));
   const attention = results.filter((r) => r.verdict === 'revoked' || r.mismatch || r.degraded || r.authorCpoaRevoked !== false);
 
-  const summary = { ...summarize(records), distinct, checked: records.length };
+  const summary = { ...summarize(records), distinct, checked: records.length, unchecked: distinct - records.length };
+  const complete = summary.unchecked === 0;
   const failed = summary.revoked > 0 || summary.mismatch > 0;
+  const partial = complete ? '' : ` ${summary.unchecked} of ${distinct} packages were not checked, so this says nothing about them; check without limit before relying on the lockfile.`;
   const advice = failed
-    ? 'At least one package is revoked or its bytes differ from what is attested. Do not install or ship this lockfile; report the packages in attention.'
-    : attention.length > 0
-      ? 'Nothing revoked or mismatched, but some answers need attention (degraded, or a revoked author). Check those again before relying on them.'
-      : 'Nothing revoked or mismatched. Unregistered packages are common and are not a failure for a dependency check.';
+    ? 'At least one package is revoked or its bytes differ from what is attested. Do not install or ship this lockfile; report the packages in attention.' + partial
+    : !complete
+      ? `Nothing revoked or mismatched among the packages checked.${partial}`
+      : attention.length > 0
+        ? 'Nothing revoked or mismatched, but some answers need attention (degraded, or a revoked author). Check those again before relying on them.'
+        : 'Nothing revoked or mismatched. Unregistered packages are common and are not a failure for a dependency check.';
   return {
-    action: failed ? 'refuse' : attention.length > 0 ? 'caution' : 'proceed',
+    action: failed ? 'refuse' : !complete || attention.length > 0 ? 'caution' : 'proceed',
     advice,
+    complete,
     summary,
     attention,
     ...(input.details ? { components: results } : {}),
