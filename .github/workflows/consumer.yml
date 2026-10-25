@@ -1,11 +1,26 @@
 # What a consumer's deploy step sees, through coderoot-eth/action against the
 # live verify endpoint: an attested release passes, a revoked one is refused
 # with exit 1, an unregistered one with exit 2.
+#
+# A manual run can also check one published npm release: it downloads that
+# exact tarball, hashes it, and expects the verdict given.
 
 name: consumer
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Also check this npm release, e.g. @coderoot-eth/verify@0.1.0"
+        required: false
+        default: ""
+        type: string
+      expect:
+        description: "The verdict that release should get"
+        required: false
+        default: verified
+        type: choice
+        options: [verified, revoked]
   push:
     branches: [main]
     paths: [".github/workflows/consumer.yml"]
@@ -74,3 +89,45 @@ jobs:
           [ "$EXIT_CODE" = "$WANT_EXIT" ] || { echo "::error::expected exit $WANT_EXIT, got $EXIT_CODE"; exit 1; }
           [ "$OUTCOME" = "$WANT_OUTCOME" ] || { echo "::error::expected the step to end $WANT_OUTCOME"; exit 1; }
           if [ "$WANT_OUTCOME" = success ]; then [ "$DEPLOYED" = success ]; else [ "$DEPLOYED" = skipped ]; fi
+
+  release:
+    if: github.event_name == 'workflow_dispatch' && inputs.release != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    name: ${{ inputs.release }}
+    steps:
+      - name: Download the release from npm and hash it
+        id: tarball
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          set -euo pipefail
+          case "$RELEASE" in (*@[0-9]*) ;; (*) echo "::error::give name@version"; exit 1;; esac
+          file="$(npm pack "$RELEASE" --silent | tail -1)"
+          echo "hash=sha256:$(shasum -a 256 "$file" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "$RELEASE -> $file"
+      - name: Verify ${{ inputs.release }}
+        id: verify
+        continue-on-error: true
+        uses: coderoot-eth/action@ba75196f488133e025fa48da341a5845c0111d8c
+        with:
+          mode: verify
+          hash: ${{ steps.tarball.outputs.hash }}
+      - name: Deploy
+        id: deploy
+        if: steps.verify.outcome == 'success'
+        run: echo "deploying $HASH"
+        env:
+          HASH: ${{ steps.tarball.outputs.hash }}
+      - name: The step must answer ${{ inputs.expect }}
+        env:
+          VERDICT: ${{ steps.verify.outputs.verdict }}
+          EXIT_CODE: ${{ steps.verify.outputs.exit-code }}
+          DEPLOYED: ${{ steps.deploy.outcome }}
+          EXPECT: ${{ inputs.expect }}
+        run: |
+          set -euo pipefail
+          echo "verdict=$VERDICT exit=$EXIT_CODE deploy=$DEPLOYED"
+          [ "$VERDICT" = "$EXPECT" ] || { echo "::error::expected $EXPECT, got $VERDICT"; exit 1; }
+          if [ "$EXPECT" = verified ]; then [ "$EXIT_CODE" = 0 ] && [ "$DEPLOYED" = success ]
+          else [ "$EXIT_CODE" = 1 ] && [ "$DEPLOYED" = skipped ]; fi
