@@ -201,9 +201,18 @@ describe('verifyDigest', () => {
     expect(revokedCache.has(`sha256:${REVOKED_SHA256}`)).toBe(true);
   });
 
+  it('asks verify first: a cached revoke does not override a live answer', async () => {
+    const revokedCache = new Set<string>([`sha256:${AXIOS_SHA256}`]);
+    const before = requests.length;
+    const result = await verifyDigest(digests(AXIOS_SHA256), 'lockfile', { baseUrl, revokedCache });
+    expect(requests.length).toBe(before + 1);
+    expect(result.verdict).toBe('verified');
+  });
+
   it('every early-return branch sets authorCpoaRevoked explicitly, never leaves it undefined', async () => {
     const revokedCache = new Set<string>([`sha256:${REVOKED_SHA256}`]);
-    const fromCache = await verifyDigest(digests(REVOKED_SHA256), 'lockfile', { baseUrl, revokedCache });
+    const fromCache = await verifyDigest(digests(REVOKED_SHA256), 'lockfile', { baseUrl: 'http://127.0.0.1:1', timeoutMs: 1000, revokedCache });
+    expect(fromCache.verdict).toBe('revoked');
     expect(fromCache.authorCpoaRevoked).toBe(false);
 
     const noDigest = await verifyDigest(null, 'none', { baseUrl });
