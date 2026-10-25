@@ -1,0 +1,76 @@
+# What a consumer's deploy step sees, through coderoot-eth/action against the
+# live verify endpoint: an attested release passes, a revoked one is refused
+# with exit 1, an unregistered one with exit 2.
+
+name: consumer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/consumer.yml"]
+  pull_request:
+    paths: [".github/workflows/consumer.yml"]
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: attested
+            release: "@vitrotech/gate-spike-b@0.0.5"
+            hash: sha256:7dd824efb4da328856e3a9182cf51af89685ec4c9cb9dd8876eead8348911402
+            verdict: verified
+            exit-code: "0"
+            outcome: success
+          - case: revoked
+            release: "@vitrotech/gate-spike-a@0.0.3"
+            hash: sha256:a7839cbbf036fd2a4ee4fc9c9c6fc90c58f3c15336fa436af0d8900abe17016c
+            verdict: revoked
+            exit-code: "1"
+            outcome: failure
+          - case: unregistered
+            release: "bytes nobody attested"
+            hash: sha256:1111111111111111111111111111111111111111111111111111111111111111
+            verdict: unregistered
+            exit-code: "2"
+            outcome: failure
+    name: ${{ matrix.case }}
+    steps:
+      - name: Verify ${{ matrix.release }}
+        id: verify
+        continue-on-error: true
+        uses: coderoot-eth/action@ba75196f488133e025fa48da341a5845c0111d8c
+        with:
+          mode: verify
+          hash: ${{ matrix.hash }}
+      - name: Deploy
+        id: deploy
+        if: steps.verify.outcome == 'success'
+        run: echo "deploying $HASH"
+        env:
+          HASH: ${{ matrix.hash }}
+      - name: The step must answer ${{ matrix.verdict }} and exit ${{ matrix.exit-code }}
+        env:
+          VERDICT: ${{ steps.verify.outputs.verdict }}
+          EXIT_CODE: ${{ steps.verify.outputs.exit-code }}
+          OUTCOME: ${{ steps.verify.outcome }}
+          DEPLOYED: ${{ steps.deploy.outcome }}
+          WANT_VERDICT: ${{ matrix.verdict }}
+          WANT_EXIT: ${{ matrix.exit-code }}
+          WANT_OUTCOME: ${{ matrix.outcome }}
+        run: |
+          set -euo pipefail
+          echo "verdict=$VERDICT exit=$EXIT_CODE outcome=$OUTCOME deploy=$DEPLOYED"
+          [ "$VERDICT" = "$WANT_VERDICT" ] || { echo "::error::expected $WANT_VERDICT, got $VERDICT"; exit 1; }
+          [ "$EXIT_CODE" = "$WANT_EXIT" ] || { echo "::error::expected exit $WANT_EXIT, got $EXIT_CODE"; exit 1; }
+          [ "$OUTCOME" = "$WANT_OUTCOME" ] || { echo "::error::expected the step to end $WANT_OUTCOME"; exit 1; }
+          if [ "$WANT_OUTCOME" = success ]; then [ "$DEPLOYED" = success ]; else [ "$DEPLOYED" = skipped ]; fi
