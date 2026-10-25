@@ -79,3 +79,17 @@ check pass. If a check fails, stop and tell the user why.
 - [spec/evidence-record.md](spec/evidence-record.md): the JSON report
 - [spec/verify-endpoint.md](spec/verify-endpoint.md): the public endpoint
 - [spec/eas-schemas.md](spec/eas-schemas.md): re-checking an attestation on chain
+
+## Over MCP
+
+`@coderoot-eth/mcp` exposes the same checks as tools: `verify_package`, `verify_hash` and
+`verify_lockfile`. Each answer includes an `action`:
+
+| `action` | you |
+|---|---|
+| `proceed` | use it |
+| `caution` | may use it as a dependency; refuse it as the artifact you ship or deploy |
+| `stop` | do not use it until the mismatch or unproven bytes are explained |
+| `refuse` | never use it |
+
+Setup is in [mcp/README.md](mcp/README.md).

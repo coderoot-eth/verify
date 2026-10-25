@@ -40,6 +40,10 @@ export interface AttestationRef {
   uid: string;
   attester?: string | undefined;
   revokedOnChain?: boolean | undefined;
+  /** When the attestation was made on chain, Unix seconds. */
+  attestedAt?: number | undefined;
+  /** When it was revoked on chain, Unix seconds; absent while it stands. */
+  revokedAt?: number | undefined;
 }
 
 export interface VerdictResult {
@@ -121,11 +125,21 @@ export function compareContentHash(
 }
 
 /** Shape returned by /verify/<hash> and /verify/<registry>/<name>/<version>. */
+/** One decoded attestation, as the endpoint returns it per schema version. */
+interface EndpointAttestation {
+  id?: string;
+  attester?: string;
+  revokedOnChain?: boolean;
+  blockTimestamp?: string;
+  revokedAt?: string;
+}
+
 interface VerifyResponse {
   verdict?: string;
-  attestations?: Array<{ id?: string; attester?: string; revokedOnChain?: boolean }>;
-  /** Legacy v0 array. Read only to enrich a UID; not the source of truth. */
-  v1Attestations?: Array<{ id?: string; attester?: string; revokedOnChain?: boolean }>;
+  /** Per-schema-version arrays. Read only to enrich a UID; not the source of truth. */
+  attestations?: EndpointAttestation[];
+  v1Attestations?: EndpointAttestation[];
+  v2Attestations?: EndpointAttestation[];
   /** The supported flat list of every UID across both eras. Prefer this. */
   attestationUids?: string[];
   contentHash?: string;
@@ -327,10 +341,19 @@ export async function verifyDigest(
  * the same UID. A UID that appears in neither array is still reported.
  */
 function extractAttestations(body: VerifyResponse): AttestationRef[] | undefined {
-  const detail = new Map<string, { attester?: string | undefined; revokedOnChain?: boolean | undefined }>();
-  for (const a of [...(body.attestations ?? []), ...(body.v1Attestations ?? [])]) {
+  const seconds = (value: string | undefined): number | undefined => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  const detail = new Map<string, Omit<AttestationRef, 'uid'>>();
+  for (const a of [...(body.attestations ?? []), ...(body.v1Attestations ?? []), ...(body.v2Attestations ?? [])]) {
     if (typeof a?.id === 'string' && a.id.length > 0 && !detail.has(a.id)) {
-      detail.set(a.id, { attester: a.attester, revokedOnChain: a.revokedOnChain });
+      const entry: Omit<AttestationRef, 'uid'> = { attester: a.attester, revokedOnChain: a.revokedOnChain };
+      const attestedAt = seconds(a.blockTimestamp);
+      const revokedAt = seconds(a.revokedAt);
+      if (attestedAt !== undefined) entry.attestedAt = attestedAt;
+      if (revokedAt !== undefined) entry.revokedAt = revokedAt;
+      detail.set(a.id, entry);
     }
   }
 
