@@ -40,6 +40,10 @@ export interface AttestationRef {
   uid: string;
   attester?: string | undefined;
   revokedOnChain?: boolean | undefined;
+  /** When the attestation was made on chain, Unix seconds. */
+  attestedAt?: number | undefined;
+  /** When it was revoked on chain, Unix seconds; absent while it stands. */
+  revokedAt?: number | undefined;
 }
 
 export interface VerdictResult {
@@ -121,11 +125,21 @@ export function compareContentHash(
 }
 
 /** Shape returned by /verify/<hash> and /verify/<registry>/<name>/<version>. */
+/** One decoded attestation, as the endpoint returns it per schema version. */
+interface EndpointAttestation {
+  id?: string;
+  attester?: string;
+  revokedOnChain?: boolean;
+  blockTimestamp?: string;
+  revokedAt?: string;
+}
+
 interface VerifyResponse {
   verdict?: string;
-  attestations?: Array<{ id?: string; attester?: string; revokedOnChain?: boolean }>;
-  /** Legacy v0 array. Read only to enrich a UID; not the source of truth. */
-  v1Attestations?: Array<{ id?: string; attester?: string; revokedOnChain?: boolean }>;
+  /** Per-schema-version arrays. Read only to enrich a UID; not the source of truth. */
+  attestations?: EndpointAttestation[];
+  v1Attestations?: EndpointAttestation[];
+  v2Attestations?: EndpointAttestation[];
   /** The supported flat list of every UID across both eras. Prefer this. */
   attestationUids?: string[];
   contentHash?: string;
@@ -243,23 +257,27 @@ export async function verifyDigest(
   // key. sha512 is sent directly when that's the only digest held.
   const queried = digests.sha256 ? `sha256:${digests.sha256}` : `sha512:${digests.sha512}`;
 
-  if (options.revokedCache?.has(queried)) {
-    return {
-      verdict: 'revoked',
-      queried,
-      hashSource,
-      reason: 'This digest was previously observed as revoked by this client (local cache).',
-      authorCpoaRevoked: false,
-    };
-  }
+  // Verify is always asked first. The local revoked cache answers only when
+  // verify cannot be read, so an outage cannot pass a digest seen revoked.
+  const fromCache = (why: string): VerdictResult | null =>
+    options.revokedCache?.has(queried)
+      ? {
+          verdict: 'revoked',
+          queried,
+          hashSource,
+          reason: `Verify could not be read (${why}); this digest was previously observed as revoked by this client (local cache).`,
+          authorCpoaRevoked: false,
+        }
+      : null;
 
   let response;
   try {
     response = await getJson(`${baseUrl}/verify/${encodeURIComponent(queried)}`, timeoutMs);
   } catch (error) {
-    // A hash already known revoked was answered from the cache above. Anything
-    // else is degraded: whether that fails or warns is the caller's call
-    // (release jobs fail, other jobs warn).
+    const cached = fromCache((error as Error).message);
+    if (cached) return cached;
+    // Anything else is degraded: whether that fails or warns is the caller's
+    // call (release jobs fail, other jobs warn).
     return {
       verdict: 'attested-bytes-unproven',
       queried,
@@ -272,6 +290,8 @@ export async function verifyDigest(
   }
 
   if (!response.ok) {
+    const cached = fromCache(`HTTP ${response.status}`);
+    if (cached) return cached;
     return {
       verdict: 'attested-bytes-unproven',
       queried,
@@ -321,10 +341,19 @@ export async function verifyDigest(
  * the same UID. A UID that appears in neither array is still reported.
  */
 function extractAttestations(body: VerifyResponse): AttestationRef[] | undefined {
-  const detail = new Map<string, { attester?: string | undefined; revokedOnChain?: boolean | undefined }>();
-  for (const a of [...(body.attestations ?? []), ...(body.v1Attestations ?? [])]) {
+  const seconds = (value: string | undefined): number | undefined => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  const detail = new Map<string, Omit<AttestationRef, 'uid'>>();
+  for (const a of [...(body.attestations ?? []), ...(body.v1Attestations ?? []), ...(body.v2Attestations ?? [])]) {
     if (typeof a?.id === 'string' && a.id.length > 0 && !detail.has(a.id)) {
-      detail.set(a.id, { attester: a.attester, revokedOnChain: a.revokedOnChain });
+      const entry: Omit<AttestationRef, 'uid'> = { attester: a.attester, revokedOnChain: a.revokedOnChain };
+      const attestedAt = seconds(a.blockTimestamp);
+      const revokedAt = seconds(a.revokedAt);
+      if (attestedAt !== undefined) entry.attestedAt = attestedAt;
+      if (revokedAt !== undefined) entry.revokedAt = revokedAt;
+      detail.set(a.id, entry);
     }
   }
 

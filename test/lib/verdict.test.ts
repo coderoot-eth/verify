@@ -51,6 +51,9 @@ beforeAll(async () => {
         totalAttestations: 1,
         revokedAttestations: 1,
         attestationUids: [`0x${'9a'.repeat(32)}`],
+        v2Attestations: [
+          { id: `0x${'9a'.repeat(32)}`, attester: '0xa793', revokedOnChain: true, blockTimestamp: '1790692048', revokedAt: '1790694170' },
+        ],
       });
     }
     if (url.includes('sha512:')) {
@@ -198,9 +201,18 @@ describe('verifyDigest', () => {
     expect(revokedCache.has(`sha256:${REVOKED_SHA256}`)).toBe(true);
   });
 
+  it('asks verify first: a cached revoke does not override a live answer', async () => {
+    const revokedCache = new Set<string>([`sha256:${AXIOS_SHA256}`]);
+    const before = requests.length;
+    const result = await verifyDigest(digests(AXIOS_SHA256), 'lockfile', { baseUrl, revokedCache });
+    expect(requests.length).toBe(before + 1);
+    expect(result.verdict).toBe('verified');
+  });
+
   it('every early-return branch sets authorCpoaRevoked explicitly, never leaves it undefined', async () => {
     const revokedCache = new Set<string>([`sha256:${REVOKED_SHA256}`]);
-    const fromCache = await verifyDigest(digests(REVOKED_SHA256), 'lockfile', { baseUrl, revokedCache });
+    const fromCache = await verifyDigest(digests(REVOKED_SHA256), 'lockfile', { baseUrl: 'http://127.0.0.1:1', timeoutMs: 1000, revokedCache });
+    expect(fromCache.verdict).toBe('revoked');
     expect(fromCache.authorCpoaRevoked).toBe(false);
 
     const noDigest = await verifyDigest(null, 'none', { baseUrl });
@@ -322,5 +334,14 @@ describe('compareContentHash (client request 2)', () => {
     expect(compareContentHash(AXIOS_SHA256, undefined)).toBe(false);
     expect(compareContentHash(AXIOS_SHA256, '')).toBe(false);
     expect(compareContentHash(AXIOS_SHA256, 'not-hex')).toBe(false);
+  });
+});
+
+describe('attestation details', () => {
+  it('reads attester and on-chain times from a v2 record', async () => {
+    const result = await verifyDigest({ sha256: '', sha512: SHA512_V2_FIXTURE, bytes: 100 }, 'registry', { baseUrl });
+    expect(result.attestations).toEqual([
+      { uid: `0x${'9a'.repeat(32)}`, attester: '0xa793', revokedOnChain: true, attestedAt: 1790692048, revokedAt: 1790694170 },
+    ]);
   });
 });
