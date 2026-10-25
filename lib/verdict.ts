@@ -243,23 +243,27 @@ export async function verifyDigest(
   // key. sha512 is sent directly when that's the only digest held.
   const queried = digests.sha256 ? `sha256:${digests.sha256}` : `sha512:${digests.sha512}`;
 
-  if (options.revokedCache?.has(queried)) {
-    return {
-      verdict: 'revoked',
-      queried,
-      hashSource,
-      reason: 'This digest was previously observed as revoked by this client (local cache).',
-      authorCpoaRevoked: false,
-    };
-  }
+  // Verify is always asked first. The local revoked cache answers only when
+  // verify cannot be read, so an outage cannot pass a digest seen revoked.
+  const fromCache = (why: string): VerdictResult | null =>
+    options.revokedCache?.has(queried)
+      ? {
+          verdict: 'revoked',
+          queried,
+          hashSource,
+          reason: `Verify could not be read (${why}); this digest was previously observed as revoked by this client (local cache).`,
+          authorCpoaRevoked: false,
+        }
+      : null;
 
   let response;
   try {
     response = await getJson(`${baseUrl}/verify/${encodeURIComponent(queried)}`, timeoutMs);
   } catch (error) {
-    // A hash already known revoked was answered from the cache above. Anything
-    // else is degraded: whether that fails or warns is the caller's call
-    // (release jobs fail, other jobs warn).
+    const cached = fromCache((error as Error).message);
+    if (cached) return cached;
+    // Anything else is degraded: whether that fails or warns is the caller's
+    // call (release jobs fail, other jobs warn).
     return {
       verdict: 'attested-bytes-unproven',
       queried,
@@ -272,6 +276,8 @@ export async function verifyDigest(
   }
 
   if (!response.ok) {
+    const cached = fromCache(`HTTP ${response.status}`);
+    if (cached) return cached;
     return {
       verdict: 'attested-bytes-unproven',
       queried,
