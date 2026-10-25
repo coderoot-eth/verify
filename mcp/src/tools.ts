@@ -52,6 +52,7 @@ export interface CheckResult {
 }
 
 const EAS_VIEW = 'https://base-sepolia.easscan.org/attestation/view/';
+const RANK: Record<Action, number> = { proceed: 0, caution: 1, stop: 2, refuse: 3 };
 const LOCKFILE_NAME = /(^|[.\-_])(package-lock|npm-shrinkwrap)\.json$/;
 
 const iso = (seconds: number | undefined): string | null => (seconds ? new Date(seconds * 1000).toISOString() : null);
@@ -150,21 +151,29 @@ export async function checkLockfile(
     ...(options.registryUrl ? { registryUrl: options.registryUrl } : {}),
   });
   const results = records.map((r) => ({ purl: r.purl, ...fromRecord(r) }));
-  const attention = results.filter((r) => r.verdict === 'revoked' || r.mismatch || r.degraded || r.authorCpoaRevoked !== false);
+  // An unregistered dependency is normal; any other answer short of proceed needs attention,
+  // and the lockfile takes the strictest action among its packages.
+  const asDependency = (r: CheckResult): Action =>
+    r.verdict === 'unregistered' && r.action === 'caution' && !r.degraded && r.authorCpoaRevoked === false ? 'proceed' : r.action;
+  const attention = results.filter((r) => asDependency(r) !== 'proceed');
 
   const summary = { ...summarize(records), distinct, checked: records.length, unchecked: distinct - records.length };
   const complete = summary.unchecked === 0;
-  const failed = summary.revoked > 0 || summary.mismatch > 0;
+  let action: Action = attention.reduce<Action>((worst, r) => (RANK[asDependency(r)] > RANK[worst] ? asDependency(r) : worst), 'proceed');
+  if (summary.revoked > 0 || summary.mismatch > 0) action = 'refuse';
+  if (!complete && RANK[action] < RANK.caution) action = 'caution';
+
   const partial = complete ? '' : ` ${summary.unchecked} of ${distinct} packages were not checked, so this says nothing about them; check without limit before relying on the lockfile.`;
-  const advice = failed
-    ? 'At least one package is revoked or its bytes differ from what is attested. Do not install or ship this lockfile; report the packages in attention.' + partial
-    : !complete
-      ? `Nothing revoked or mismatched among the packages checked.${partial}`
-      : attention.length > 0
-        ? 'Nothing revoked or mismatched, but some answers need attention (degraded, or a revoked author). Check those again before relying on them.'
-        : 'Nothing revoked or mismatched. Unregistered packages are common and are not a failure for a dependency check.';
+  const advice = {
+    refuse: 'At least one package is revoked or its bytes differ from what is attested. Do not install or ship this lockfile; report the packages in attention.',
+    stop: 'Some packages could not be proven: no digest could be obtained for them, or their bytes did not match an attested record. Do not rely on this lockfile until they are checked; see attention.',
+    caution: attention.length > 0
+      ? 'Nothing revoked, mismatched or unproven, but some answers need attention (degraded, or a revoked author). Check those again before relying on them.'
+      : 'Nothing revoked, mismatched or unproven among the packages checked.',
+    proceed: 'Nothing revoked, mismatched or unproven. Unregistered packages are common and are not a failure for a dependency check.',
+  }[action] + partial;
   return {
-    action: failed ? 'refuse' : !complete || attention.length > 0 ? 'caution' : 'proceed',
+    action,
     advice,
     complete,
     summary,

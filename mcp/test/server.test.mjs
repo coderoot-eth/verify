@@ -236,6 +236,33 @@ test('verify_lockfile: a partial scan is never proceed, even when everything che
   await client.close();
 });
 
+test('verify_lockfile: a package whose bytes cannot be proven stops the whole lockfile', async () => {
+  const client = await connect();
+  // No integrity, and the registry does not know the package (as for a private dependency).
+  const content = JSON.stringify({ lockfileVersion: 3, packages: { 'node_modules/private-dependency': { version: '1.0.0' } } });
+  const result = (await call(client, 'verify_lockfile', { content, details: true })).structuredContent;
+  assert.equal(result.complete, true);
+  assert.equal(result.summary.notQueried, 1);
+  assert.equal(result.components[0].action, 'stop');
+  assert.equal(result.action, 'stop');
+  assert.deepEqual(result.attention.map((a) => a.purl), ['pkg:npm/private-dependency@1.0.0']);
+
+  // A revoked package still outranks it.
+  const both = JSON.stringify({ lockfileVersion: 3, packages: {
+    'node_modules/private-dependency': { version: '1.0.0' },
+    'node_modules/bad': { version: '1.0.0', integrity: `sha512-${sha512(TARBALLS['bad@1.0.0']).toString('base64')}` },
+  } });
+  assert.equal((await call(client, 'verify_lockfile', { content: both })).structuredContent.action, 'refuse');
+  await client.close();
+
+  // The same with the registry and the endpoint both unreachable.
+  const offline = await connect({ CODEROOT_VERIFY_URL: 'http://127.0.0.1:1', CODEROOT_NPM_REGISTRY: 'http://127.0.0.1:1' });
+  const unreachable = (await call(offline, 'verify_lockfile', { content })).structuredContent;
+  assert.equal(unreachable.action, 'stop');
+  assert.equal(unreachable.attention.length, 1);
+  await offline.close();
+});
+
 test('verify_lockfile: malformed input and paths that are not a lockfile are errors', async () => {
   const client = await connect();
   assert.equal((await call(client, 'verify_lockfile', { content: '{ not json' })).isError, true);
