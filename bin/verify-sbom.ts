@@ -28,13 +28,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseSbomFile, parseLockfileFile, distinctByPurl, strongestDeclared, SbomComponent } from '../lib/sbom';
-import { verifyDigest, probeCoordinates, compareContentHash, HashSource } from '../lib/verdict';
-import { digestBuffer } from '../lib/digest';
-import { buildReport, renderSummary, toEvidenceRecord, EvidenceRecord, EXIT } from '../lib/report';
+import { parseSbomFile, parseLockfileFile, distinctByPurl } from '../lib/sbom';
+import { buildReport, renderSummary, EXIT } from '../lib/report';
 import { RevokedCache } from '../lib/revoked-cache';
-
-const TOOL_VERSION = '0.1.0-m2';
+import { verifyComponents } from '../lib/batch';
+import { packageVersion } from '../lib/version';
 
 interface Args {
   help?: boolean;
@@ -70,104 +68,6 @@ function parseArgs(argv: string[]): Args {
     }
   }
   return args;
-}
-
-/** Run `fn` over items with a fixed number of workers, preserving order. */
-async function pool<T, R>(items: T[], workers: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let cursor = 0;
-  await Promise.all(
-    Array.from({ length: Math.max(1, workers) }, async () => {
-      while (cursor < items.length) {
-        const index = cursor++;
-        out[index] = await fn(items[index]);
-      }
-    })
-  );
-  return out;
-}
-
-/**
- * Acquire a digest for one component.
- *
- * The tier order is lockfile -> bytes -> registry -> sbom-hint -> none.
- * Here the npm registry stands in for the lockfile/registry tiers when there
- * is no real lockfile to read (the packument's dist.integrity IS the
- * lockfile value), and `bytes` is reached by hashing the tarball we
- * downloaded, which is always preferred when reachable: we then hold the
- * actual artifact, not someone else's record of what it should be.
- *
- * `declaredSource` decides what an unacquired declared digest falls back to
- * when nothing stronger is reachable (offline, unresolvable ecosystem, or no
- * tarball). An SBOM's declared hash is a hint and never queried. A
- * package-lock.json's `integrity`, by contrast, is npm's own install-time
- * record of what was fetched, not a third party's guess, so it is classified
- * `lockfile` and queried normally - the HashSource type already ranks it
- * above `bytes` for exactly this reason.
- */
-interface Acquired {
-  hashSource: HashSource;
-  sha256?: string;
-  sha512?: string;
-  digests: string[];
-  /**
-   * The strongest digest the input document itself declared, kept even when
-   * `bytes` wins the query, so a caller can compare fetched bytes against
-   * what was declared (e.g. a lockfile's install-time `integrity`).
-   */
-  declared: ReturnType<typeof strongestDeclared>;
-}
-
-/** A declared digest, shaped for the result - sha256 only goes in the queryable field. */
-function fromDeclared(
-  declared: ReturnType<typeof strongestDeclared>,
-  hashSource: HashSource
-): Acquired {
-  if (!declared) return { hashSource: 'none', digests: [], declared: null };
-  const digests = [`${declared.algorithm}:${declared.hex}`];
-  if (declared.algorithm === 'sha256') return { hashSource, sha256: declared.hex, digests, declared };
-  if (declared.algorithm === 'sha512') return { hashSource, sha512: declared.hex, digests, declared };
-  return { hashSource, digests, declared };
-}
-
-async function acquire(
-  component: SbomComponent,
-  offline: boolean,
-  declaredSource: 'sbom-hint' | 'lockfile' = 'sbom-hint'
-): Promise<Acquired> {
-  const declared = strongestDeclared(component);
-
-  if (offline || component.ecosystem !== 'npm' || !component.version) {
-    // Nothing obtainable without the network, or an ecosystem this build
-    // does not resolve. `lockfile` vs `sbom-hint` still matters for the
-    // report: the former is a trustworthy source, the latter is a hint
-    // only.
-    return fromDeclared(declared, declaredSource);
-  }
-
-  try {
-    const packument = (await (await fetch(`https://registry.npmjs.org/${component.name}`)).json()) as {
-      versions?: Record<string, { dist?: { tarball?: string } }>;
-    };
-    const tarball = packument.versions?.[component.version]?.dist?.tarball;
-    if (!tarball) return fromDeclared(declared, declaredSource);
-
-    const bytes = new Uint8Array(await (await fetch(tarball)).arrayBuffer());
-    const set = digestBuffer(bytes);
-    // We hold the artifact and hashed it ourselves: that is the `bytes` tier,
-    // and the only way to have both algorithms for the same artifact. `declared`
-    // still carries the document's own hash (if any), for the caller to compare
-    // against these bytes - see the Acquired interface doc.
-    return {
-      hashSource: 'bytes',
-      sha256: set.sha256,
-      sha512: set.sha512,
-      digests: [`sha256:${set.sha256}`, `sha512:${set.sha512}`],
-      declared,
-    };
-  } catch {
-    return fromDeclared(declared, declaredSource);
-  }
 }
 
 /** Run the batch verification. Returns the exit code; never exits. */
@@ -211,63 +111,14 @@ export async function runVerifySbom(argv: string[]): Promise<number> {
     ...(cache ? { revokedCache: cache.asSet() } : {}),
   };
 
-  let done = 0;
-  const records: EvidenceRecord[] = await pool(components, args.concurrency, async (component) => {
-    const acquired = await acquire(component, args.offline, declaredSource);
-    // --offline means resolve and classify, never call the network. Checked
-    // explicitly here rather than relying on verifyDigest to decline a query
-    // on its own.
-    const outcome = args.offline
-      ? {
-          verdict: 'attested-bytes-unproven' as const,
-          queried: null,
-          hashSource: acquired.hashSource,
-          reason: 'Offline: resolved and classified, but not queried.',
-        }
-      : await verifyDigest(
-          acquired.sha256 || acquired.sha512
-            ? { sha256: acquired.sha256 ?? '', sha512: acquired.sha512 ?? '', bytes: 0 }
-            : null,
-          acquired.hashSource,
-          verifyOptions
-        );
-
-    // Two mismatch checks, both only possible once bytes were fetched.
-    let mismatch = false;
-    if (acquired.sha256 && acquired.hashSource === 'bytes' && component.ecosystem === 'npm' && component.version) {
-      // Against the coordinate route's contentHash (the hash route never returns one).
-      const coordinates = await probeCoordinates(
-        component.ecosystem,
-        component.name ?? '',
-        component.version,
-        verifyOptions
-      );
-      mismatch = compareContentHash(acquired.sha256, coordinates.contentHash);
-
-      // Against the lockfile's own declared integrity, when there is one.
-      if (!mismatch && declaredSource === 'lockfile' && acquired.declared) {
-        const ours = acquired.declared.algorithm === 'sha512' ? acquired.sha512 : acquired.sha256;
-        if (ours) mismatch = compareContentHash(ours, acquired.declared.hex);
-      }
-    }
-
-    if (++done % 25 === 0) process.stderr.write(`  ${done}/${components.length}\n`);
-    return toEvidenceRecord(
-      component,
-      {
-        verdict: outcome.verdict,
-        hashSource: outcome.hashSource,
-        queried: outcome.queried,
-        reason: outcome.reason,
-        degraded: outcome.degraded,
-        mismatch,
-        attestations: outcome.totalAttestations,
-        attestationUids: outcome.attestations?.map((a) => a.uid),
-        authorCpoaRevoked: outcome.authorCpoaRevoked,
-        authorCpoaRevokedUids: outcome.authorCpoaRevokedUids,
-      },
-      acquired.digests
-    );
+  const records = await verifyComponents(components, {
+    declaredSource,
+    offline: args.offline,
+    concurrency: args.concurrency,
+    verify: verifyOptions,
+    onProgress: (done, total) => {
+      if (done % 25 === 0) process.stderr.write(`  ${done}/${total}\n`);
+    },
   });
   cache?.flush();
 
@@ -278,7 +129,7 @@ export async function runVerifySbom(argv: string[]): Promise<number> {
     distinct,
     startedAt,
     records,
-    toolVersion: TOOL_VERSION,
+    toolVersion: packageVersion(),
   });
 
   const json = JSON.stringify(report, null, 2);

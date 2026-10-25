@@ -116,7 +116,7 @@ describe('mismatch detection', () => {
 });
 
 describe('the revoked cache', () => {
-  it('fails a cached-revoked digest even when the endpoint would answer differently', async () => {
+  it('asks verify first: a live answer wins over a cached revoke', async () => {
     const cacheFile = tmpCachePath();
     fs.writeFileSync(
       cacheFile,
@@ -129,6 +129,27 @@ describe('the revoked cache', () => {
     try {
       const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cr-sbom-')), 'report.json');
       const code = await runVerifySbom(['--sbom', FIXTURE, '--json', out, '--base-url', baseUrl]);
+      const report = JSON.parse(fs.readFileSync(out, 'utf8'));
+      expect(report.records[0].verdict).toBe('verified');
+      expect(code).toBe(0);
+    } finally {
+      delete process.env['CODEROOT_REVOKED_CACHE'];
+    }
+  });
+
+  it('fails a cached-revoked digest when verify cannot be read', async () => {
+    const cacheFile = tmpCachePath();
+    fs.writeFileSync(
+      cacheFile,
+      JSON.stringify({
+        schema: 'coderoot.revoked-cache/v1',
+        entries: [{ digest: `sha256:${tarballSha256()}`, seenAt: new Date().toISOString() }],
+      })
+    );
+    process.env['CODEROOT_REVOKED_CACHE'] = cacheFile;
+    try {
+      const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cr-sbom-')), 'report.json');
+      const code = await runVerifySbom(['--sbom', FIXTURE, '--json', out, '--base-url', 'http://127.0.0.1:1']);
       const report = JSON.parse(fs.readFileSync(out, 'utf8'));
       expect(report.records[0].verdict).toBe('revoked');
       expect(code).toBe(1);

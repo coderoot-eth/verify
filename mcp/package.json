@@ -1,0 +1,54 @@
+{
+  "name": "@coderoot-eth/mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets an AI agent check dependencies and artifacts against CodeRoot's public attestations. Read-only: it can verify, never attest or revoke.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coderoot-eth/verify.git",
+    "directory": "mcp"
+  },
+  "homepage": "https://github.com/coderoot-eth/verify/tree/main/mcp#readme",
+  "bugs": {
+    "url": "https://github.com/coderoot-eth/verify/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "supply-chain",
+    "attestation",
+    "npm",
+    "verification"
+  ],
+  "main": "./dist/main.js",
+  "bin": {
+    "coderoot-mcp": "./dist/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test --test-timeout=120000 test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "4.6.7"
+  }
+}
