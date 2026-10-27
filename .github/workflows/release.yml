@@ -107,7 +107,7 @@ jobs:
           echo "$TB64" | base64 -d > package.tgz
           [ "$(shasum -a 256 package.tgz | cut -d' ' -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }
       - name: Submit to CodeRoot
-        uses: coderoot-eth/action@6f77e7bb55372732a9292fffc6a47033b5f53f3f # v1.0.0
+        uses: coderoot-eth/action@ff3728e2cee915566aef97b68ae4cec9f0d300c1 # v1.1.0
         with:
           mode: submit
           flow: published
