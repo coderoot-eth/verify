@@ -63,7 +63,7 @@ jobs:
       - name: Verify ${{ matrix.release }}
         id: verify
         continue-on-error: true
-        uses: coderoot-eth/action@ba75196f488133e025fa48da341a5845c0111d8c
+        uses: coderoot-eth/action@6f77e7bb55372732a9292fffc6a47033b5f53f3f # v1.0.0
         with:
           mode: verify
           hash: ${{ matrix.hash }}
@@ -109,7 +109,7 @@ jobs:
       - name: Verify ${{ inputs.release }}
         id: verify
         continue-on-error: true
-        uses: coderoot-eth/action@ba75196f488133e025fa48da341a5845c0111d8c
+        uses: coderoot-eth/action@6f77e7bb55372732a9292fffc6a47033b5f53f3f # v1.0.0
         with:
           mode: verify
           hash: ${{ steps.tarball.outputs.hash }}
