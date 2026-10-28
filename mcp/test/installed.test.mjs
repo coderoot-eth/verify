@@ -28,5 +28,5 @@ test('an installed @coderoot-eth/mcp starts on its own and reports its own versi
 
   assert.deepEqual(client.getServerVersion(), { name: 'coderoot', version });
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 3);
+  assert.equal(tools.length, 5);
 });

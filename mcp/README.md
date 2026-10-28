@@ -1,8 +1,9 @@
 # @coderoot-eth/mcp
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent check dependencies and
-artifacts against CodeRoot's public attestations before it uses them. It is read-only: it can
-verify, and it cannot attest or revoke anything.
+artifacts against CodeRoot's public attestations before it uses them, and set up a package to
+release through CodeRoot. It is read-only: it can verify and hand out the release setup, and it
+cannot approve, attest or revoke anything.
 
 Every answer rests on a digest of the bytes. A name and version alone never come back verified.
 
@@ -13,6 +14,8 @@ Every answer rests on a digest of the bytes. A name and version alone never come
 | `verify_package` | `name`, `version` | downloads the npm tarball, hashes it, verifies the bytes, and flags bytes that differ from what is attested for that name and version |
 | `verify_hash` | `digest` (`sha256:<hex>` or `sha512:<hex>`), `source` | one digest the agent already holds |
 | `verify_lockfile` | `path` or `content`, optional `limit`, `details` | every package in a `package-lock.json` (lockfileVersion 2 or 3) |
+| `setup_release` | `package`, `repository`, optional `node` | returns the release and deploy workflows for a package, and the steps only a person can do |
+| `release_history` | `name`, optional `limit` | checks the newest published versions by their bytes and names `latestVerified`, the version to deploy or move back to |
 
 Each answer carries the verdict, an `action` for the agent, the reason, and every attestation
 behind it with its attester, its on-chain times and a link to it on EAS:
@@ -52,6 +55,29 @@ mismatched, `stop` when a package's bytes could not be proven (for example no di
 obtained). Unregistered packages are common and do not fail it. `details: true` adds the result for every package. With `limit`, only the first
 packages are checked: the result says `complete: false` with the number left unchecked, and its
 action is never `proceed`.
+
+## Releasing a package through CodeRoot
+
+`setup_release` returns two workflows to write into the package's repository:
+
+- `.github/workflows/release.yml`: on a tag `v1.2.3`, builds and tests once, publishes that
+  tarball from the `npm-publish` environment with npm trusted publishing and provenance (no npm
+  token exists), then submits the same tarball to CodeRoot with the job's GitHub identity token.
+- `.github/workflows/deploy.yml`: run with a version; it fetches the tarball npm serves, checks it
+  with `coderoot-eth/action` in `verify` mode, and deploys only on `verified`.
+
+It also returns the steps only a person can do: create the `npm-publish` environment, add the
+trusted publisher on npm, ask a CodeRoot workspace admin to link the repository, workflow and
+package, and approve or revoke each release in the CodeRoot queue.
+
+| after | `verify_package` answers | the agent |
+|---|---|---|
+| the release run submits | `unregistered` | waits: the release is with a person (the submit job prints the review link) |
+| a person approves | `verified` | deploys that version |
+| a person revokes | `revoked` | stops deploying it, calls `release_history` and deploys its `latestVerified` |
+
+Approving and revoking stay with a person. This server has no tool for either, and the gate
+refuses anyone else.
 
 ## Set up
 
