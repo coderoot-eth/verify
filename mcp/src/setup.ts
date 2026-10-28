@@ -13,6 +13,8 @@ const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 const CHECKOUT = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1';
 const SETUP_NODE = 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0';
+const UPLOAD_ARTIFACT = 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2';
+const DOWNLOAD_ARTIFACT = 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2';
 const ACTION = 'coderoot-eth/action@v1';
 const NPM = '12.2.0';
 
@@ -63,7 +65,6 @@ jobs:
     outputs:
       name: \${{ steps.pack.outputs.name }}
       version: \${{ steps.pack.outputs.version }}
-      tarball_b64: \${{ steps.pack.outputs.tarball_b64 }}
       sha256: \${{ steps.pack.outputs.sha256 }}
     steps:
       - uses: ${CHECKOUT}
@@ -88,9 +89,14 @@ jobs:
           {
             echo "name=$name"
             echo "version=$version"
-            echo "tarball_b64=$(base64 -w0 package.tgz)"
             echo "sha256=$(sha256sum package.tgz | cut -d' ' -f1)"
           } >> "$GITHUB_OUTPUT"
+      - uses: ${UPLOAD_ARTIFACT}
+        with:
+          name: package
+          path: package.tgz
+          if-no-files-found: error
+          retention-days: 7
 
   publish:
     needs: pack
@@ -107,14 +113,13 @@ jobs:
           cache: ""
       - name: Exact npm
         run: npm install -g npm@${NPM} --ignore-scripts && npm --version
-      - name: Restore and verify the tarball
+      - uses: ${DOWNLOAD_ARTIFACT}
+        with:
+          name: package
+      - name: Check the tarball is the one pack built
         env:
-          TB64: \${{ needs.pack.outputs.tarball_b64 }}
           EXPECTED: \${{ needs.pack.outputs.sha256 }}
-        run: |
-          set -euo pipefail
-          echo "$TB64" | base64 -d > package.tgz
-          [ "$(sha256sum package.tgz | cut -d' ' -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }
+        run: '[ "$(sha256sum package.tgz | cut -d" " -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }'
       - name: Publish with provenance
         run: npm publish package.tgz --registry https://registry.npmjs.org/ --access public --provenance --ignore-scripts
 
@@ -126,14 +131,13 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Restore and verify the tarball
+      - uses: ${DOWNLOAD_ARTIFACT}
+        with:
+          name: package
+      - name: Check the tarball is the one pack built
         env:
-          TB64: \${{ needs.pack.outputs.tarball_b64 }}
           EXPECTED: \${{ needs.pack.outputs.sha256 }}
-        run: |
-          set -euo pipefail
-          echo "$TB64" | base64 -d > package.tgz
-          [ "$(sha256sum package.tgz | cut -d' ' -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }
+        run: '[ "$(sha256sum package.tgz | cut -d" " -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }'
       - name: Submit to CodeRoot
         uses: ${ACTION}
         with:

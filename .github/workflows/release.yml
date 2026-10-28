@@ -30,7 +30,6 @@ jobs:
     outputs:
       name: ${{ steps.pack.outputs.name }}
       version: ${{ steps.pack.outputs.version }}
-      tarball_b64: ${{ steps.pack.outputs.tarball_b64 }}
       sha256: ${{ steps.pack.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,9 +59,14 @@ jobs:
           {
             echo "name=$name"
             echo "version=$version"
-            echo "tarball_b64=$(base64 -w0 package.tgz)"
             echo "sha256=$(shasum -a 256 package.tgz | cut -d' ' -f1)"
           } >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package
+          path: package.tgz
+          if-no-files-found: error
+          retention-days: 7
 
   publish:
     needs: pack
@@ -79,14 +83,13 @@ jobs:
           cache: ""
       - name: Exact npm
         run: npm install -g npm@12.2.0 --ignore-scripts && npm --version
-      - name: Restore and verify the tarball
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+      - name: Check the tarball is the one pack built
         env:
-          TB64: ${{ needs.pack.outputs.tarball_b64 }}
           EXPECTED: ${{ needs.pack.outputs.sha256 }}
-        run: |
-          set -euo pipefail
-          echo "$TB64" | base64 -d > package.tgz
-          [ "$(shasum -a 256 package.tgz | cut -d' ' -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }
+        run: '[ "$(shasum -a 256 package.tgz | cut -d" " -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }'
       - name: Publish with provenance
         run: npm publish package.tgz --registry https://registry.npmjs.org/ --access public --provenance --ignore-scripts
 
@@ -98,14 +101,13 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Restore and verify the tarball
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+      - name: Check the tarball is the one pack built
         env:
-          TB64: ${{ needs.pack.outputs.tarball_b64 }}
           EXPECTED: ${{ needs.pack.outputs.sha256 }}
-        run: |
-          set -euo pipefail
-          echo "$TB64" | base64 -d > package.tgz
-          [ "$(shasum -a 256 package.tgz | cut -d' ' -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }
+        run: '[ "$(shasum -a 256 package.tgz | cut -d" " -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }'
       - name: Submit to CodeRoot
         uses: coderoot-eth/action@ff3728e2cee915566aef97b68ae4cec9f0d300c1 # v1.1.0
         with:

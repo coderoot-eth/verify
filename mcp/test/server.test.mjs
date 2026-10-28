@@ -295,6 +295,12 @@ test('setup_release: the release and deploy workflows, with no secret and nothin
   assert.match(release, /name: \$\{\{ needs\.pack\.outputs\.name \}\}/, 'expressions survive the template');
   // Only the publish job may hold npm's trust; submit has no environment.
   assert.equal(release.match(/environment:/g).length, 1);
+  // The tarball moves between jobs as an artifact, re-checked by its SHA-256, never through an
+  // output or environment variable, which a larger package overflows.
+  assert.doesNotMatch(release, /base64|tarball_b64/);
+  assert.equal(release.match(/uses: actions\/upload-artifact@[0-9a-f]{40}/g).length, 1);
+  assert.equal(release.match(/uses: actions\/download-artifact@[0-9a-f]{40}/g).length, 2);
+  assert.equal(release.match(/sha256sum package\.tgz \| cut -d" " -f1\)" = "\$EXPECTED"/g).length, 2);
 
   const deploy = files['.github/workflows/deploy.yml'];
   assert.match(deploy, /PACKAGE: "@acme\/widget"/);
