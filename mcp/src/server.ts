@@ -117,7 +117,8 @@ export function createServer(options: CheckOptions = {}): McpServer {
       description:
         'Checks the newest published versions of an npm package by their bytes and returns each verdict, npm\'s latest, and ' +
         'latestVerified: the newest version that answers verified. Use it after a revoke to move back to the previous good version, ' +
-        'or to see that a new release is still waiting for a person (unregistered).',
+        'or to see that a new release is still waiting for a person (unregistered). personSteps lists the npm commands a package ' +
+        'owner runs after a revoke (move latest back, deprecate the revoked version); give them to the person, never run them.',
       inputSchema: {
         name: z.string().min(1).describe('npm package name'),
         limit: z.number().int().positive().max(50).default(10).describe('how many of the newest versions to check'),

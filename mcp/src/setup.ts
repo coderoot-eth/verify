@@ -223,13 +223,14 @@ export function setupRelease(input: SetupInput): SetupResult {
       `npm (package owner): if ${pkg} does not exist yet, publish a code-free 0.0.0 placeholder by hand to reserve it. Then add a trusted publisher on npmjs.com: GitHub Actions, repository ${repo}, workflow \`release.yml\`, environment \`npm-publish\`. Publish the first real version within 48 hours, or npm drops the setting.`,
       `CodeRoot (workspace admin): link repository ${repo}, workflow \`.github/workflows/release.yml\` and package ${pkg} to the workspace. Give them the repository id and owner id: \`gh api repos/${repo} --jq '.id, .owner.id'\`.`,
       'CodeRoot (a person in the queue): approve each release at its review link, and revoke a release that must no longer be trusted.',
+      `npm (package owner), after a revoke: move \`latest\` back to the newest verified version and deprecate the revoked one, with your own npm login. The release workflow cannot: trusted publishing only publishes. release_history returns the exact commands in personSteps.`,
     ],
     agentSteps: [
       'Write the two files, commit package.json and package-lock.json with them, and push to the default branch.',
       'When the person confirms the steps above, set the version in package.json, commit, and push a tag v<version> on that commit.',
       'Watch the release run. The submit job ends with the review link; the release now waits for a person. Until they approve, verify_package answers unregistered.',
       'After the approval, verify_package answers verified. Deploy with: gh workflow run deploy.yml -f version=<version>.',
-      'If a release is revoked, verify_package answers revoked and the deploy refuses it. Call release_history, and deploy its latestVerified version instead.',
+      'If a release is revoked, verify_package answers revoked and the deploy refuses it. Call release_history, deploy its latestVerified version instead, and give the person its personSteps for npm.',
     ],
     never: [
       'Approve or revoke a release. Only a person in the CodeRoot queue can, and the gate refuses anyone else.',
@@ -254,6 +255,11 @@ export interface HistoryResult {
   /** The newest checked version whose bytes answer verified: the one to deploy or move back to. */
   latestVerified: string | null;
   advice: string;
+  /**
+   * npm changes only a package owner can make, with their own login: move \`latest\` off a
+   * revoked version and deprecate revoked versions. Empty when nothing needs changing.
+   */
+  personSteps: string[];
   versions: HistoryEntry[];
 }
 
@@ -298,5 +304,16 @@ export async function releaseHistory(name: string, limit = 10, options: CheckOpt
       `npm's latest, ${npmLatest ?? 'none'}, answers ${latestEntry?.verdict ?? 'nothing among the versions checked'}. ` +
       `Deploy ${latestVerified}, the newest version that answers verified.`;
 
-  return { package: name, npmLatest, latestVerified, advice, versions };
+  const personSteps: string[] = [];
+  if (latestEntry?.verdict === 'revoked' && latestVerified) {
+    personSteps.push(`npm dist-tag add ${name}@${latestVerified} latest`);
+  }
+  for (const v of versions) {
+    if (v.verdict === 'revoked' && !v.deprecated) {
+      const use = latestVerified ? ` Use ${latestVerified} or a later verified release.` : '';
+      personSteps.push(`npm deprecate ${name}@${v.version} "Revoked in CodeRoot.${use}"`);
+    }
+  }
+
+  return { package: name, npmLatest, latestVerified, advice, personSteps, versions };
 }

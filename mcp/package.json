@@ -1,6 +1,6 @@
 {
   "name": "@coderoot-eth/mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server that lets an AI agent check dependencies and artifacts against CodeRoot's public attestations. Read-only: it can verify, never attest or revoke.",
   "license": "Apache-2.0",
   "repository": {
