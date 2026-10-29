@@ -109,7 +109,7 @@ jobs:
           EXPECTED: ${{ needs.pack.outputs.sha256 }}
         run: '[ "$(shasum -a 256 package.tgz | cut -d" " -f1)" = "$EXPECTED" ] || { echo "digest mismatch"; exit 1; }'
       - name: Submit to CodeRoot
-        uses: coderoot-eth/action@ff3728e2cee915566aef97b68ae4cec9f0d300c1 # v1.1.0
+        uses: coderoot-eth/action@b223537eb81026b90477e4e02e70d9c4fcdf7d95 # v1.1.1
         with:
           mode: submit
           flow: published
