@@ -80,10 +80,26 @@ check pass. If a check fails, stop and tell the user why.
 - [spec/verify-endpoint.md](spec/verify-endpoint.md): the public endpoint
 - [spec/eas-schemas.md](spec/eas-schemas.md): re-checking an attestation on chain
 
+## Releasing your own package
+
+To set up a public npm package to release through CodeRoot, call the MCP tool `setup_release`
+with the package name and its GitHub repository, write the two workflows it returns, and tell the
+user the steps it lists for a person. Release by pushing a tag `v<version>` that matches
+`package.json`.
+
+- After the release run, the release waits for a person. Until they approve, `verify_package`
+  answers `unregistered`: report the review link from the submit job and wait.
+- Deploy only a version that answers `verified`, through the deploy workflow.
+- After a revoke, call `release_history` and deploy its `latestVerified` version. Never deploy the
+  revoked one again.
+- Never approve or revoke a release, never try to, and never add an npm token or other secret to
+  the repository.
+
 ## Over MCP
 
 `@coderoot-eth/mcp` exposes the same checks as tools: `verify_package`, `verify_hash` and
-`verify_lockfile`. Each answer includes an `action`:
+`verify_lockfile`, plus `setup_release` and `release_history` for releasing a package. Each
+verification answer includes an `action`:
 
 | `action` | you |
 |---|---|

@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { checkHash, checkPackage, checkLockfile, CheckOptions } from './tools';
+import { setupRelease, releaseHistory } from './setup';
 /** This package's version, baked in by build.mjs. */
 declare const __MCP_VERSION__: string;
 export const VERSION: string = typeof __MCP_VERSION__ === 'string' ? __MCP_VERSION__ : '0.0.0-dev';
@@ -15,7 +16,7 @@ function failure(error: unknown) {
   return { isError: true, content: [{ type: 'text' as const, text: (error as Error).message }] };
 }
 
-/** An MCP server with three read-only tools. It can verify; it can never attest or revoke. */
+/** An MCP server with read-only tools. It can verify and set up a release; it can never approve, attest or revoke. */
 export function createServer(options: CheckOptions = {}): McpServer {
   const server = new McpServer({ name: 'coderoot', version: VERSION });
 
@@ -78,6 +79,54 @@ export function createServer(options: CheckOptions = {}): McpServer {
     async ({ path, content, limit, details }) => {
       try {
         return reply(await checkLockfile({ ...(path ? { path } : {}), ...(content !== undefined ? { content } : {}), ...(limit ? { limit } : {}), details }, options));
+      } catch (error) {
+        return failure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'setup_release',
+    {
+      title: 'Set up a package to release through CodeRoot',
+      description:
+        'Returns the GitHub workflows that publish an npm package with trusted publishing and provenance, submit each release ' +
+        'to CodeRoot for a person to approve, and deploy a version only when it answers verified. Also returns the steps only a ' +
+        'person can do (npm trusted publisher, linking the repository to CodeRoot, approving and revoking) and what the agent does next. ' +
+        'Write the files as given; do not add secrets.',
+      inputSchema: {
+        package: z.string().min(1).describe('npm package name, e.g. @acme/widget'),
+        repository: z.string().min(1).describe('public GitHub repository, owner/name'),
+        node: z.string().default('22').describe('Node major version for the build'),
+      },
+      annotations: { ...readOnly, openWorldHint: false },
+    },
+    async ({ package: pkg, repository, node }) => {
+      try {
+        return reply(setupRelease({ package: pkg, repository, node }));
+      } catch (error) {
+        return failure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'release_history',
+    {
+      title: 'Find the version to deploy',
+      description:
+        'Checks the newest published versions of an npm package by their bytes and returns each verdict, npm\'s latest, and ' +
+        'latestVerified: the newest version that answers verified. Use it after a revoke to move back to the previous good version, ' +
+        'or to see that a new release is still waiting for a person (unregistered).',
+      inputSchema: {
+        name: z.string().min(1).describe('npm package name'),
+        limit: z.number().int().positive().max(50).default(10).describe('how many of the newest versions to check'),
+      },
+      annotations: readOnly,
+    },
+    async ({ name, limit }) => {
+      try {
+        return reply(await releaseHistory(name, limit, options));
       } catch (error) {
         return failure(error);
       }

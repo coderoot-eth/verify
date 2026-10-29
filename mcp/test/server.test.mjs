@@ -20,6 +20,10 @@ const TARBALLS = {
   'good@1.0.0': Buffer.from('good tarball'),
   'swapped@1.0.0': Buffer.from('bytes npm serves'),
   'bad@1.0.0': Buffer.from('revoked tarball'),
+  // A package's history: a good release, a revoked one, and one still waiting for a person.
+  'hist@1.0.0': Buffer.from('good tarball'),
+  'hist@1.1.0': Buffer.from('revoked tarball'),
+  'hist@1.2.0': Buffer.from('waiting for a person'),
 };
 const VERIFIED = sha256(TARBALLS['good@1.0.0']);
 const REVOKED = sha256(TARBALLS['bad@1.0.0']);
@@ -59,11 +63,16 @@ before(async () => {
     if ((m = /^\/registry\/tarballs\/(.+)$/.exec(url))) return send(200, TARBALLS[m[1]], 'application/octet-stream');
     if ((m = /^\/registry\/(.+)$/.exec(url))) {
       const versions = {};
-      for (const key of Object.keys(TARBALLS)) {
+      const time = {};
+      let latest = null;
+      for (const [i, key] of Object.keys(TARBALLS).entries()) {
         const [name, version] = key.split('@');
-        if (name === m[1]) versions[version] = { dist: { tarball: `${base}/registry/tarballs/${key}` } };
+        if (name !== m[1]) continue;
+        versions[version] = { dist: { tarball: `${base}/registry/tarballs/${key}` } };
+        time[version] = new Date(Date.UTC(2026, 9, 1 + i)).toISOString();
+        latest = version;
       }
-      return Object.keys(versions).length ? send(200, { versions }) : send(404, { error: 'not found' });
+      return latest ? send(200, { 'dist-tags': { latest }, time, versions }) : send(404, { error: 'not found' });
     }
     send(404, {});
   });
@@ -92,10 +101,11 @@ async function connect(env = {}) {
 
 const call = async (client, name, args) => client.callTool({ name, arguments: args });
 
-test('three read-only tools, and nothing that attests or revokes', async () => {
+test('read-only tools, and nothing that approves, attests or revokes', async () => {
   const client = await connect();
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ['verify_hash', 'verify_lockfile', 'verify_package']);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ['release_history', 'setup_release', 'verify_hash', 'verify_lockfile', 'verify_package']);
+  for (const t of tools) assert.doesNotMatch(t.name, /approve|attest|revoke|submit/);
   for (const t of tools) assert.equal(t.annotations.readOnlyHint, true, t.name);
   await client.close();
 });
@@ -269,5 +279,64 @@ test('verify_lockfile: malformed input and paths that are not a lockfile are err
   assert.equal((await call(client, 'verify_lockfile', { content: '{"lockfileVersion":1}' })).isError, true);
   assert.equal((await call(client, 'verify_lockfile', { path: '/etc/hosts' })).isError, true);
   assert.equal((await call(client, 'verify_lockfile', {})).isError, true);
+  await client.close();
+});
+
+test('setup_release: the release and deploy workflows, with no secret and nothing that skips the check', async () => {
+  const client = await connect();
+  const out = (await call(client, 'setup_release', { package: '@acme/widget', repository: 'https://github.com/acme/widget.git' })).structuredContent;
+  const files = Object.fromEntries(out.files.map((f) => [f.path, f.content]));
+  assert.deepEqual(Object.keys(files), ['.github/workflows/release.yml', '.github/workflows/deploy.yml']);
+
+  const release = files['.github/workflows/release.yml'];
+  assert.match(release, /environment: npm-publish/);
+  assert.match(release, /npm publish package\.tgz .*--provenance/);
+  assert.match(release, /uses: coderoot-eth\/action@v1\n\s+with:\n\s+mode: submit\n\s+flow: published/);
+  assert.match(release, /name: \$\{\{ needs\.pack\.outputs\.name \}\}/, 'expressions survive the template');
+  // Only the publish job may hold npm's trust; submit has no environment.
+  assert.equal(release.match(/environment:/g).length, 1);
+  // The tarball moves between jobs as an artifact, re-checked by its SHA-256, never through an
+  // output or environment variable, which a larger package overflows.
+  assert.doesNotMatch(release, /base64|tarball_b64/);
+  assert.equal(release.match(/uses: actions\/upload-artifact@[0-9a-f]{40}/g).length, 1);
+  assert.equal(release.match(/uses: actions\/download-artifact@[0-9a-f]{40}/g).length, 2);
+  assert.equal(release.match(/sha256sum package\.tgz \| cut -d" " -f1\)" = "\$EXPECTED"/g).length, 2);
+
+  const deploy = files['.github/workflows/deploy.yml'];
+  assert.match(deploy, /PACKAGE: "@acme\/widget"/);
+  assert.match(deploy, /mode: verify\n\s+hash: \$\{\{ steps\.tarball\.outputs\.hash \}\}/);
+  for (const text of [release, deploy]) {
+    assert.doesNotMatch(text, /secrets\.|NPM_TOKEN|NODE_AUTH_TOKEN|registry-url|continue-on-error|\|\| true/);
+  }
+
+  assert.ok(out.humanSteps.some((s) => /trusted publisher/.test(s) && /acme\/widget/.test(s)));
+  assert.ok(out.humanSteps.some((s) => /gh api repos\/acme\/widget --jq '\.id, \.owner\.id'/.test(s)));
+  assert.ok(out.never.some((s) => /Approve or revoke/.test(s)));
+  await client.close();
+});
+
+test('setup_release: a bad package name or repository is refused', async () => {
+  const client = await connect();
+  const badName = await call(client, 'setup_release', { package: 'Not A Name', repository: 'acme/widget' });
+  assert.equal(badName.isError, true);
+  const badRepo = await call(client, 'setup_release', { package: 'widget', repository: 'widget' });
+  assert.equal(badRepo.isError, true);
+  await client.close();
+});
+
+test('release_history: after a revoke, the version to move back to is the newest verified one', async () => {
+  const client = await connect();
+  const out = (await call(client, 'release_history', { name: 'hist' })).structuredContent;
+  assert.deepEqual(out.versions.map((v) => [v.version, v.verdict, v.action]), [
+    ['1.2.0', 'unregistered', 'caution'],
+    ['1.1.0', 'revoked', 'refuse'],
+    ['1.0.0', 'verified', 'proceed'],
+  ]);
+  assert.equal(out.npmLatest, '1.2.0');
+  assert.equal(out.latestVerified, '1.0.0');
+  assert.match(out.advice, /Deploy 1\.0\.0/);
+
+  const unknown = await call(client, 'release_history', { name: 'nothing-here' });
+  assert.equal(unknown.isError, true);
   await client.close();
 });
