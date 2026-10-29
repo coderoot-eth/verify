@@ -74,7 +74,17 @@ package, and approve or revoke each release in the CodeRoot queue.
 |---|---|---|
 | the release run submits | `unregistered` | waits: the release is with a person (the submit job prints the review link) |
 | a person approves | `verified` | deploys that version |
-| a person revokes | `revoked` | stops deploying it, calls `release_history` and deploys its `latestVerified` |
+| a person revokes | `revoked` | stops deploying it, calls `release_history`, deploys its `latestVerified`, and gives the person its `personSteps` |
+
+After a revoke, npm still serves the revoked version, and it may still be `latest`. Only a package
+owner can move `latest` back and deprecate it, with their own npm login: trusted publishing lets the
+release workflow publish and nothing else. `release_history` returns those commands in
+`personSteps`, for example:
+
+```
+npm dist-tag add @acme/widget@1.0.0 latest
+npm deprecate @acme/widget@1.1.0 "Revoked in CodeRoot. Use 1.0.0 or a later verified release."
+```
 
 Approving and revoking stay with a person. This server has no tool for either, and the gate
 refuses anyone else.

@@ -24,6 +24,9 @@ const TARBALLS = {
   'hist@1.0.0': Buffer.from('good tarball'),
   'hist@1.1.0': Buffer.from('revoked tarball'),
   'hist@1.2.0': Buffer.from('waiting for a person'),
+  // npm's latest is the revoked release.
+  'back@1.0.0': Buffer.from('good tarball'),
+  'back@1.1.0': Buffer.from('revoked tarball'),
 };
 const VERIFIED = sha256(TARBALLS['good@1.0.0']);
 const REVOKED = sha256(TARBALLS['bad@1.0.0']);
@@ -304,7 +307,8 @@ test('setup_release: the release and deploy workflows, with no secret and nothin
 
   const deploy = files['.github/workflows/deploy.yml'];
   assert.match(deploy, /PACKAGE: "@acme\/widget"/);
-  assert.match(deploy, /mode: verify\n\s+hash: \$\{\{ steps\.tarball\.outputs\.hash \}\}/);
+  // The check hashes the tarball itself, so the evidence records bytes, not a digest handed in.
+  assert.match(deploy, /mode: verify\n\s+artifact: \$\{\{ steps\.tarball\.outputs\.file \}\}/);
   for (const text of [release, deploy]) {
     assert.doesNotMatch(text, /secrets\.|NPM_TOKEN|NODE_AUTH_TOKEN|registry-url|continue-on-error|\|\| true/);
   }
@@ -312,6 +316,7 @@ test('setup_release: the release and deploy workflows, with no secret and nothin
   assert.ok(out.humanSteps.some((s) => /trusted publisher/.test(s) && /acme\/widget/.test(s)));
   assert.ok(out.humanSteps.some((s) => /gh api repos\/acme\/widget --jq '\.id, \.owner\.id'/.test(s)));
   assert.ok(out.never.some((s) => /Approve or revoke/.test(s)));
+  assert.ok(out.humanSteps.some((s) => /after a revoke/.test(s) && /trusted publishing only publishes/.test(s)));
   await client.close();
 });
 
@@ -335,8 +340,23 @@ test('release_history: after a revoke, the version to move back to is the newest
   assert.equal(out.npmLatest, '1.2.0');
   assert.equal(out.latestVerified, '1.0.0');
   assert.match(out.advice, /Deploy 1\.0\.0/);
+  // npm's latest (1.2.0) is unapproved, not revoked: only the revoked 1.1.0 needs a deprecation.
+  assert.deepEqual(out.personSteps, ['npm deprecate hist@1.1.0 "Revoked in CodeRoot. Use 1.0.0 or a later verified release."']);
 
   const unknown = await call(client, 'release_history', { name: 'nothing-here' });
   assert.equal(unknown.isError, true);
+  await client.close();
+});
+
+test('release_history: when npm\'s latest is revoked, the person moves latest back and deprecates it', async () => {
+  const client = await connect();
+  const out = (await call(client, 'release_history', { name: 'back' })).structuredContent;
+  assert.equal(out.npmLatest, '1.1.0');
+  assert.equal(out.latestVerified, '1.0.0');
+  assert.match(out.advice, /npm's latest, 1\.1\.0, answers revoked\. Deploy 1\.0\.0/);
+  assert.deepEqual(out.personSteps, [
+    'npm dist-tag add back@1.0.0 latest',
+    'npm deprecate back@1.1.0 "Revoked in CodeRoot. Use 1.0.0 or a later verified release."',
+  ]);
   await client.close();
 });

@@ -91,7 +91,9 @@ user the steps it lists for a person. Release by pushing a tag `v<version>` that
   answers `unregistered`: report the review link from the submit job and wait.
 - Deploy only a version that answers `verified`, through the deploy workflow.
 - After a revoke, call `release_history` and deploy its `latestVerified` version. Never deploy the
-  revoked one again.
+  revoked one again. Give the user its `personSteps`: the npm commands that move `latest` back and
+  deprecate the revoked version. A package owner runs them with their own npm login; you cannot,
+  because the release workflow's trusted publishing only publishes.
 - Never approve or revoke a release, never try to, and never add an npm token or other secret to
   the repository.
 
