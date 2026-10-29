@@ -192,7 +192,7 @@ jobs:
         uses: ${ACTION}
         with:
           mode: verify
-          hash: \${{ steps.tarball.outputs.hash }}
+          artifact: \${{ steps.tarball.outputs.file }}
       # Runs only when the step above answered verified. Replace with the real deploy.
       - name: Deploy
         env:

@@ -307,7 +307,8 @@ test('setup_release: the release and deploy workflows, with no secret and nothin
 
   const deploy = files['.github/workflows/deploy.yml'];
   assert.match(deploy, /PACKAGE: "@acme\/widget"/);
-  assert.match(deploy, /mode: verify\n\s+hash: \$\{\{ steps\.tarball\.outputs\.hash \}\}/);
+  // The check hashes the tarball itself, so the evidence records bytes, not a digest handed in.
+  assert.match(deploy, /mode: verify\n\s+artifact: \$\{\{ steps\.tarball\.outputs\.file \}\}/);
   for (const text of [release, deploy]) {
     assert.doesNotMatch(text, /secrets\.|NPM_TOKEN|NODE_AUTH_TOKEN|registry-url|continue-on-error|\|\| true/);
   }
