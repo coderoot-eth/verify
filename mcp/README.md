@@ -5,6 +5,8 @@ artifacts against CodeRoot's public attestations before it uses them, and set up
 release through CodeRoot. It is read-only: it can verify and hand out the release setup, and it
 cannot approve, attest or revoke anything.
 
+New to CodeRoot? Start with ["What CodeRoot is and why"](https://github.com/coderoot-eth/verify/blob/main/AGENTS.md#what-coderoot-is-and-why) in AGENTS.md.
+
 Every answer rests on a digest of the bytes. A name and version alone never come back verified.
 
 ## Tools
