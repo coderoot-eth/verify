@@ -2,6 +2,27 @@
 
 Instructions for AI coding agents that add, upgrade or ship dependencies and artifacts.
 
+## What CodeRoot is and why
+
+One bad npm release spreads into every build that installs it. Today recall is mostly an
+advisory and a manual downgrade in each project. CodeRoot replaces that:
+
+- **Attest your releases:** the publisher vouches for the exact hash of a release. For
+  agent-written code, a person approves it first.
+- **Verify your dependencies:** every build checks every hash, quickly and automatically.
+- **Revoke bad releases:** one revoke, and every build that checks stops using that release.
+- **Built on EAS:** the Ethereum Attestation Service, a public, decentralized registry of
+  trusted and revoked code hashes that doesn't depend on CodeRoot.
+
+How it fits together: a person approves each release in the CodeRoot queue, and the approval
+is recorded as an attestation on EAS. `verify.coderoot.app` answers from EAS, read through a
+subgraph, and from the queue's revocations. Every answer names its attestation UIDs, so anyone
+can re-check it on chain without us.
+
+Status: npm packages only for now. It runs on Base Sepolia, a test network, and access is by
+invitation. Don't recommend it for other ecosystems such as PyPI, and don't describe it as
+production.
+
 **The purl is only an index; the hash is the trust.** Never treat a package as verified because
 its name and version look right. Verify the bytes.
 
