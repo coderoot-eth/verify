@@ -15,7 +15,7 @@ const CHECKOUT = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 const SETUP_NODE = 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0';
 const UPLOAD_ARTIFACT = 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2';
 const DOWNLOAD_ARTIFACT = 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2';
-const ACTION = 'coderoot-eth/action@v1';
+const ACTION = 'coderoot-eth/action@b223537eb81026b90477e4e02e70d9c4fcdf7d95 # v1.1.1';
 const NPM = '12.2.0';
 
 export interface SetupInput {
@@ -35,6 +35,8 @@ export interface SetupResult {
   agentSteps: string[];
   /** Never done by an agent. */
   never: string[];
+  /** What this setup does not cover. */
+  limits: string[];
 }
 
 function releaseWorkflow(node: string): string {
@@ -222,7 +224,7 @@ export function setupRelease(input: SetupInput): SetupResult {
       `GitHub (repository admin): create the environment \`npm-publish\` in ${repo} (Settings → Environments), limited to tags matching \`v*\`.`,
       `npm (package owner): if ${pkg} does not exist yet, publish a code-free 0.0.0 placeholder by hand to reserve it. Then add a trusted publisher on npmjs.com: GitHub Actions, repository ${repo}, workflow \`release.yml\`, environment \`npm-publish\`. Publish the first real version within 48 hours, or npm drops the setting.`,
       `CodeRoot (workspace admin): link repository ${repo}, workflow \`.github/workflows/release.yml\` and package ${pkg} to the workspace. Give them the repository id and owner id: \`gh api repos/${repo} --jq '.id, .owner.id'\`.`,
-      'CodeRoot (a person in the queue): approve each release at its review link, and revoke a release that must no longer be trusted.',
+      'CodeRoot (a person in the queue): approve each release at its review link, and revoke a release that must no longer be trusted. Each approve and revoke opens the keys.rooteth.com window and takes a touch of that person\'s passkey; without it the gate refuses.',
       `npm (package owner), after a revoke: move \`latest\` back to the newest verified version and deprecate the revoked one, with your own npm login. The release workflow cannot: trusted publishing only publishes. release_history returns the exact commands in personSteps.`,
     ],
     agentSteps: [
@@ -236,6 +238,10 @@ export function setupRelease(input: SetupInput): SetupResult {
       'Approve or revoke a release. Only a person in the CodeRoot queue can, and the gate refuses anyone else.',
       'Add an npm token, a CodeRoot credential or any other secret to the repository or the workflows.',
       'Add continue-on-error or || true to the CodeRoot steps, or deploy a version that does not answer verified.',
+    ],
+    limits: [
+      'Lockfile checks read npm package-lock.json (lockfileVersion 2 or 3) only, not pnpm or yarn lockfiles.',
+      'The release workflow uses the published flow: npm publishes the version, then a person approves it. Staged publishing, where npm holds the version until approval, is not covered yet.',
     ],
   };
 }
