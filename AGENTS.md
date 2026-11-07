@@ -105,11 +105,12 @@ check pass. If a check fails, stop and tell the user why.
 
 To set up a public npm package to release through CodeRoot, call the MCP tool `setup_release`
 with the package name and its GitHub repository, write the two workflows it returns, and tell the
-user the steps it lists for a person. Release by pushing a tag `v<version>` that matches
-`package.json`.
+user the steps it lists for a person and its `limits`. Release by pushing a tag `v<version>` that
+matches `package.json`.
 
-- After the release run, the release waits for a person. Until they approve, `verify_package`
-  answers `unregistered`: report the review link from the submit job and wait.
+- After the release run, the release waits for a person, who approves it in the CodeRoot queue
+  with a passkey touch. Until they approve, `verify_package` answers `unregistered`: report the
+  review link from the submit job and wait.
 - Deploy only a version that answers `verified`, through the deploy workflow.
 - After a revoke, call `release_history` and deploy its `latestVerified` version. Never deploy the
   revoked one again. Give the user its `personSteps`: the npm commands that move `latest` back and

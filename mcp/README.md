@@ -70,7 +70,12 @@ action is never `proceed`.
 
 It also returns the steps only a person can do: create the `npm-publish` environment, add the
 trusted publisher on npm, ask a CodeRoot workspace admin to link the repository, workflow and
-package, and approve or revoke each release in the CodeRoot queue.
+package, and approve or revoke each release in the CodeRoot queue. Each approve and revoke opens
+the `keys.rooteth.com` window and takes a touch of that person's passkey; without it the gate
+refuses.
+
+Every action in both workflows, `coderoot-eth/action` included, is pinned to a commit, with its
+version as a comment.
 
 | after | `verify_package` answers | the agent |
 |---|---|---|
@@ -90,6 +95,15 @@ npm deprecate @acme/widget@1.1.0 "Revoked in CodeRoot. Use 1.0.0 or a later veri
 
 Approving and revoking stay with a person. This server has no tool for either, and the gate
 refuses anyone else.
+
+### Limits
+
+`setup_release` returns these in `limits`:
+
+- Lockfile checks read npm `package-lock.json` (lockfileVersion 2 or 3) only, not pnpm or yarn
+  lockfiles.
+- The release workflow uses the published flow: npm publishes the version, then a person approves
+  it. Staged publishing, where npm holds the version until approval, is not covered yet.
 
 ## Set up
 
