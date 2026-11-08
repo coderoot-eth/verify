@@ -3,6 +3,8 @@
 Check that the dependencies and artifacts you use are the bytes their publisher released, and
 that the release is still trusted, against CodeRoot's public attestations.
 
+New to CodeRoot? Start with ["What CodeRoot is and why"](https://github.com/coderoot-eth/verify/blob/main/AGENTS.md#what-coderoot-is-and-why) in AGENTS.md.
+
 **The purl is only an index; the hash is the trust.** A component is never reported verified
 because its name and version matched. Each answer rests on a digest of the bytes, and names the
 EAS attestation UIDs behind it, so anyone can re-check it on chain without CodeRoot.
