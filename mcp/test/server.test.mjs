@@ -294,7 +294,14 @@ test('setup_release: the release and deploy workflows, with no secret and nothin
   const release = files['.github/workflows/release.yml'];
   assert.match(release, /environment: npm-publish/);
   assert.match(release, /npm publish package\.tgz .*--provenance/);
-  assert.match(release, /uses: coderoot-eth\/action@v1\n\s+with:\n\s+mode: submit\n\s+flow: published/);
+  assert.match(release, /uses: coderoot-eth\/action@[0-9a-f]{40} # v\d+\.\d+\.\d+\n\s+with:\n\s+mode: submit\n\s+flow: published/);
+  // Every action, our own included, is pinned to a commit.
+  for (const f of Object.values(files)) {
+    for (const [, ref] of f.matchAll(/uses: [^@\s]+@(\S+)/g)) assert.match(ref, /^[0-9a-f]{40}$/);
+  }
+  assert.ok(out.humanSteps.some((s) => /passkey/.test(s) && /keys\.rooteth\.com/.test(s)));
+  assert.ok(out.limits.some((s) => /package-lock\.json/.test(s) && /pnpm/.test(s)));
+  assert.ok(out.limits.some((s) => /published flow/.test(s) && /[Ss]taged/.test(s)));
   assert.match(release, /name: \$\{\{ needs\.pack\.outputs\.name \}\}/, 'expressions survive the template');
   // Only the publish job may hold npm's trust; submit has no environment.
   assert.equal(release.match(/environment:/g).length, 1);

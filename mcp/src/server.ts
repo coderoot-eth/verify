@@ -92,7 +92,8 @@ export function createServer(options: CheckOptions = {}): McpServer {
       description:
         'Returns the GitHub workflows that publish an npm package with trusted publishing and provenance, submit each release ' +
         'to CodeRoot for a person to approve, and deploy a version only when it answers verified. Also returns the steps only a ' +
-        'person can do (npm trusted publisher, linking the repository to CodeRoot, approving and revoking) and what the agent does next. ' +
+        'person can do (npm trusted publisher, linking the repository to CodeRoot, approving and revoking with a passkey) and what the agent does next, ' +
+        'and the limits of this setup (npm package-lock.json only; the published flow only). Tell the person the limits. ' +
         'Write the files as given; do not add secrets.',
       inputSchema: {
         package: z.string().min(1).describe('npm package name, e.g. @acme/widget'),
